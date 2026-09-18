@@ -1,32 +1,33 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 import json
 import os
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='.', static_url_path='')
 CORS(app)
 
-# Archivo local en el servidor para guardar los datos de forma permanente
 DB_FILE = "fleet_database.json"
 
 def load_db():
-    """Carga los datos desde el archivo persistente en disco"""
     if os.path.exists(DB_FILE):
         try:
             with open(DB_FILE, "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception as e:
             print("Error leyendo base de datos:", e)
-    # Estructura inicial por defecto si el archivo no existe
     return {"machines": [], "dailyLedger": []}
 
 def save_db(data):
-    """Guarda los datos en el archivo físico para que no se borren nunca"""
     try:
         with open(DB_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=4)
     except Exception as e:
         print("Error guardando base de datos:", e)
+
+# Ruta principal para servir el panel web directamente desde Render
+@app.route('/')
+def serve_index():
+    return send_from_directory('.', 'index.html')
 
 @app.route('/api/telemetry', methods=['GET', 'POST'])
 def handle_telemetry():
