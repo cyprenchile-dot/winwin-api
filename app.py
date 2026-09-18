@@ -1,18 +1,36 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
+import json
+import os
 
 app = Flask(__name__)
 CORS(app)
 
-# Estado centralizado de la flota en la nube de Render
-fleet_state = {
-    "machines": [],
-    "dailyLedger": []
-}
+# Archivo local en el servidor para guardar los datos de forma permanente
+DB_FILE = "fleet_database.json"
+
+def load_db():
+    """Carga los datos desde el archivo persistente en disco"""
+    if os.path.exists(DB_FILE):
+        try:
+            with open(DB_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            print("Error leyendo base de datos:", e)
+    # Estructura inicial por defecto si el archivo no existe
+    return {"machines": [], "dailyLedger": []}
+
+def save_db(data):
+    """Guarda los datos en el archivo físico para que no se borren nunca"""
+    try:
+        with open(DB_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=4)
+    except Exception as e:
+        print("Error guardando base de datos:", e)
 
 @app.route('/api/telemetry', methods=['GET', 'POST'])
 def handle_telemetry():
-    global fleet_state
+    fleet_state = load_db()
     if request.method == 'POST':
         data = request.get_json()
         if data:
@@ -20,10 +38,8 @@ def handle_telemetry():
             coins = data.get('coins', 0)
             prize = data.get('prize', '')
 
-            # Buscar si la máquina ya existe en la flota
             machine = next((m for m in fleet_state["machines"] if m["mac"] == device_id), None)
             if not machine:
-                # Si es un dispositivo nuevo, se registra automáticamente
                 machine = {
                     "mac": device_id,
                     "name": f"Terminal {device_id[-5:]}",
@@ -37,7 +53,6 @@ def handle_telemetry():
                 }
                 fleet_state["machines"].append(machine)
 
-            # Actualizar valores si la máquina está activa
             if machine.get("active", True):
                 if coins > 0:
                     machine["sales"] += coins * 100
@@ -45,20 +60,18 @@ def handle_telemetry():
                 if prize and prize != "":
                     machine["prizes"] = machine.get("prizes", 0) + 1
             
-            # Actualizar señal Wi-Fi
             if 'wifi' in data:
                 machine["wifi"] = data['wifi']
 
-            return jsonify({'success': True, 'message': 'Sincronizado en la nube'}), 200
+            save_db(fleet_state)
+            return jsonify({'success': True, 'message': 'Guardado en disco persistente'}), 200
         return jsonify({'success': False}), 400
     else:
-        # Devuelve el estado completo de la flota a cualquier cliente conectado
         return jsonify(fleet_state), 200
 
-# Endpoint para sincronizar cambios de administración (agregar, eliminar, pausar, vaciar cajas)
 @app.route('/api/sync-fleet', methods=['GET', 'POST'])
 def sync_fleet():
-    global fleet_state
+    fleet_state = load_db()
     if request.method == 'POST':
         data = request.get_json()
         if data:
@@ -66,6 +79,7 @@ def sync_fleet():
                 fleet_state["machines"] = data["machines"]
             if "dailyLedger" in data:
                 fleet_state["dailyLedger"] = data["dailyLedger"]
+            save_db(fleet_state)
             return jsonify({'success': True}), 200
         return jsonify({'success': False}), 400
     else:
