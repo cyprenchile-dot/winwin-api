@@ -14,7 +14,7 @@ def load_data():
             try:
                 return json.load(f)
             except:
-                return {}
+                pass
     return {
         "dailyLedger": [],
         "machines": []
@@ -29,18 +29,13 @@ def save_data(data):
 def serve_index():
     return send_file('index.html')
 
-# Ruta ultra-robusta para recibir la telemetría del ESP32
+# Ruta para recibir la telemetría del ESP32
 @app.route('/api/telemetry', methods=['POST'])
 def receive_telemetry():
     try:
-        # Lectura directa y segura del cuerpo de la petición sin importar cabeceras
-        raw_data = request.data.decode('utf-8')
-        data = json.loads(raw_data) if raw_data else {}
+        data = request.get_json(force=True)
     except Exception as e:
-        print(f"❌ Error al decodificar JSON: {e}")
         return jsonify({"error": "JSON inválido"}), 400
-
-    print(f"📦 [TELEMETRIA RECIBIDA]: {data}")
 
     if not data:
         return jsonify({"error": "JSON vacío"}), 400
@@ -49,7 +44,6 @@ def receive_telemetry():
     if not dev_id:
         return jsonify({"error": "Falta identificador"}), 400
 
-    # Conversión segura a enteros
     try:
         coins_received = int(data.get('coins', 0))
     except:
@@ -93,11 +87,11 @@ def receive_telemetry():
         monto_clp = coins_received * 100
         machine["box"] = machine.get("box", 0) + monto_clp
         machine["sales"] = machine.get("sales", 0) + monto_clp
-        print(f"💰 [MONEDA PROCESADA] ¡+{monto_clp} CLP! Total en caja: {machine['box']}")
+        print(f"💰 [MONEDA] +{monto_clp} CLP para {dev_id}. Total box: {machine['box']}")
 
     if prize_status == "dispense":
         machine["prizes"] = machine.get("prizes", 0) + 1
-        print(f"🎁 [PREMIO REGISTRADO]")
+        print(f"🎁 [PREMIO] Registrado en {dev_id}")
 
     machine["wifi"] = wifi_signal
     machine["active"] = True
@@ -106,14 +100,25 @@ def receive_telemetry():
 
     return jsonify({"status": "success", "data": machine}), 200
 
-@app.route('/api/sync-fleet', methods=['GET'])
+# Ruta de sincronización para el frontend (soporta GET y POST)
+@app.route('/api/sync-fleet', methods=['GET', 'POST'])
 def sync_fleet():
-    db = load_data()
-    return jsonify(db), 200
+    if request.method == 'POST':
+        try:
+            data = request.get_json(force=True)
+            if data:
+                save_data(data)
+                return jsonify({"status": "success"}), 200
+        except Exception as e:
+            return jsonify({"error": str(e)}), 400
+        return jsonify({"error": "Datos inválidos"}), 400
+    else:
+        db = load_data()
+        return jsonify(db), 200
 
 @app.route('/api/status', methods=['GET'])
 def get_status():
     return sync_fleet()
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port5000)
+    app.run(host='0.0.0.0', port=5000)
