@@ -78,6 +78,7 @@ def receive_telemetry():
         wifi_signal = -60
 
     prize_status = str(data.get('prize', ''))
+    is_active = data.get('active')
 
     db = load_data()
     if "machines" not in db:
@@ -90,10 +91,11 @@ def receive_telemetry():
             break
 
     if not machine:
+        # Corrección aplicada: se usa sintaxis válida de Python [-5:] en lugar de .substring(-5)
         machine = {
             "mac": dev_id,
             "device_id": dev_id,
-            "name": f"Terminal {dev_id.substring(-5) if len(dev_id)>=5 else 'Nuevo'}",
+            "name": f"Terminal {dev_id[-5:] if len(dev_id)>=5 else 'Nuevo'}",
             "active": True,
             "box": 0,
             "sales": 0,
@@ -113,8 +115,10 @@ def receive_telemetry():
     if prize_status == "dispense":
         machine["prizes"] = machine.get("prizes", 0) + 1
 
+    if is_active is not None:
+        machine["active"] = bool(is_active)
+
     machine["wifi"] = wifi_signal
-    machine["active"] = True
 
     save_data(db)
     return jsonify({"status": "success", "box": machine["box"], "sales": machine["sales"]}), 200
