@@ -23,7 +23,6 @@ def save_data(data):
 
 @app.route('/api/telemetry', methods=['POST'])
 def receive_telemetry():
-    # Usar force=True para asegurar que Flask interprete el JSON sin importar las cabeceras exactas
     data = request.get_json(force=True)
     if not data:
         return jsonify({"error": "JSON vacío"}), 400
@@ -38,6 +37,7 @@ def receive_telemetry():
 
     db = load_data()
 
+    # Si la máquina no está registrada, la inicializamos con los datos de tu terreno
     if dev_id not in db:
         db[dev_id] = {
             "name": "Peluchera Mall Plaza",
@@ -49,7 +49,7 @@ def receive_telemetry():
             "status": "online"
         }
 
-    # Si llegan pulsos, multiplicamos 1 pulso = 100 CLP y acumulamos
+    # Cada pulso del billetero se multiplica: 1 pulso = 100 CLP
     if coins_received > 0:
         monto_clp = coins_received * 100
         db[dev_id]["box_cash"] += monto_clp
@@ -67,6 +67,12 @@ def receive_telemetry():
 
     return jsonify({"status": "success", "data": db[dev_id]}), 200
 
+# Ruta que consulta tu panel web (index.html) en tiempo real
+@app.route('/api/sync-fleet', methods=['GET'])
+def sync_fleet():
+    return jsonify(load_data()), 200
+
+# Ruta de respaldo por compatibilidad
 @app.route('/api/status', methods=['GET'])
 def get_status():
     return jsonify(load_data()), 200
