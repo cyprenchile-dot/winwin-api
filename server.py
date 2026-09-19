@@ -15,7 +15,11 @@ def load_data():
                 return json.load(f)
             except:
                 return {}
-    return {}
+    # Estructura base inicial que espera el index.html
+    return {
+        "dailyLedger": [],
+        "machines": []
+    }
 
 def save_data(data):
     with open(DATABASE_FILE, 'w') as f:
@@ -36,55 +40,57 @@ def receive_telemetry():
     prize_status = data.get('prize', '')
 
     db = load_data()
+    
+    # Asegurar que exista la lista de máquinas
+    if "machines" not in db:
+        db["machines"] = []
 
-    if dev_id not in db:
-        db[dev_id] = {
+    # Buscar si la máquina ya existe en la lista
+    machine = None
+    for m in db["machines"]:
+        if m.get("mac") == dev_id or m.get("device_id") == dev_id:
+            machine = m
+            break
+
+    # Si no existe, la creamos con las llaves exactas que exige index.html (box y sales)
+    if not machine:
+        machine = {
             "mac": dev_id,
             "device_id": dev_id,
-            "name": "Peluchera Mall Plaza",
+            "name": "Terminal 10:01",
             "active": True,
-            "box_cash": 0,
-            "daily_sales": 0,
+            "box": 0,
+            "sales": 0,
             "prizes": 0,
             "wifi": wifi_signal,
-            "status": "online"
+            "dailyLogs": {},
+            "withdrawalHistory": []
         }
+        db["machines"].append(machine)
 
     # Cada pulso del billetero equivale exactamente a 100 CLP
     if coins_received > 0:
         monto_clp = coins_received * 100
-        db[dev_id]["box_cash"] = db[dev_id].get("box_cash", 0) + monto_clp
-        db[dev_id]["daily_sales"] = db[dev_id].get("daily_sales", 0) + monto_clp
-        print(f"💰 [MONEDA] ¡+{monto_clp} CLP sumados a {dev_id}! Total caja: {db[dev_id]['box_cash']}")
+        machine["box"] += monto_clp
+        machine["sales"] += monto_clp
+        print(f"💰 [MONEDA] ¡+{monto_clp} CLP sumados a {dev_id}! Total box: {machine['box']}")
 
     if prize_status == "dispense":
-        db[dev_id]["prizes"] = db[dev_id].get("prizes", 0) + 1
+        machine["prizes"] += 1
         print(f"🎁 [PREMIO] ¡Premio registrado en {dev_id}!")
 
-    db[dev_id]["wifi"] = wifi_signal
-    db[dev_id]["status"] = "online"
-
-    # Duplicar nombres de llaves para compatibilidad total con cualquier index.html
-    db[dev_id]["caja"] = db[dev_id]["box_cash"]
-    db[dev_id]["caja_fisica"] = db[dev_id]["box_cash"]
-    db[dev_id]["ventas"] = db[dev_id]["daily_sales"]
-    db[dev_id]["ventas_dia"] = db[dev_id]["daily_sales"]
-    db[dev_id]["premios"] = db[dev_id]["prizes"]
+    machine["wifi"] = wifi_signal
+    machine["active"] = True
 
     save_data(db)
 
-    return jsonify({"status": "success", "data": db[dev_id]}), 200
+    return jsonify({"status": "success", "data": machine}), 200
 
-# IMPORTANTE: Devolvemos los datos como una LISTA de objetos para que el frontend los lea sin error
+# Ruta exacta que consulta el index.html en formato idéntico al que requiere
 @app.route('/api/sync-fleet', methods=['GET'])
 def sync_fleet():
     db = load_data()
-    fleet_list = []
-    for mac_key, info in db.items():
-        info["mac"] = mac_key
-        info["device_id"] = mac_key
-        fleet_list.append(info)
-    return jsonify(fleet_list), 200
+    return jsonify(db), 200
 
 @app.route('/api/status', methods=['GET'])
 def get_status():
