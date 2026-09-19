@@ -17,8 +17,6 @@ def load_data():
                     return data
         except Exception as e:
             print(f"⚠️ Error leyendo JSON: {e}")
-    
-    # Estructura inicial por defecto si no existe archivo
     return {
         "dailyLedger": [],
         "machines": []
@@ -40,11 +38,10 @@ def receive_telemetry():
     try:
         data = request.get_json(force=True)
     except Exception as e:
-        print(f"❌ Error al parsear JSON del ESP32: {e}")
+        print(f"❌ Error al parsear JSON: {e}")
         return jsonify({"error": "JSON inválido"}), 400
 
-    print(f"📥 [DATOS BRUTOS ESP32]: {data}")
-
+    print(f"📥 [DATOS]: {data}")
     if not data:
         return jsonify({"error": "JSON vacío"}), 400
 
@@ -52,7 +49,6 @@ def receive_telemetry():
     if not dev_id:
         return jsonify({"error": "Falta identificador"}), 400
 
-    # Capturar monedas de forma segura (soporta 'coins' o 'pulse')
     try:
         coins_received = int(data.get('coins') or data.get('pulse') or 0)
     except:
@@ -66,7 +62,6 @@ def receive_telemetry():
     prize_status = str(data.get('prize', ''))
 
     db = load_data()
-    
     if "machines" not in db:
         db["machines"] = []
 
@@ -91,22 +86,19 @@ def receive_telemetry():
         }
         db["machines"].append(machine)
 
-    # Acumular dinero si llegan monedas (> 0) -> 1 pulso = 100 CLP
     if coins_received > 0:
         monto_clp = coins_received * 100
         machine["box"] = machine.get("box", 0) + monto_clp
         machine["sales"] = machine.get("sales", 0) + monto_clp
-        print(f"💰 ¡ÉXITO! Sumados +{monto_clp} CLP. Caja actual de la máquina: {machine['box']}")
+        print(f"💰 Sumados +{monto_clp} CLP. Total caja: {machine['box']}")
 
     if prize_status == "dispense":
         machine["prizes"] = machine.get("prizes", 0) + 1
-        print(f"🎁 ¡Premio registrado!")
 
     machine["wifi"] = wifi_signal
     machine["active"] = True
 
     save_data(db)
-
     return jsonify({"status": "success", "box": machine["box"], "sales": machine["sales"]}), 200
 
 @app.route('/api/sync-fleet', methods=['GET', 'POST'])
