@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 import json
 import os
@@ -24,12 +24,11 @@ def save_data(data):
     with open(DATABASE_FILE, 'w') as f:
         json.dump(data, f, indent=4)
 
-# 1. Ruta principal para mostrar tu panel visual (index.html)
+# Ruta raíz blindada con send_file para cargar index.html sin errores de ruta
 @app.route('/')
 def serve_index():
-    return send_from_directory('.', 'index.html')
+    return send_file('index.html')
 
-# 2. Ruta para recibir los datos del ESP32
 @app.route('/api/telemetry', methods=['POST'])
 def receive_telemetry():
     data = request.get_json(force=True)
@@ -88,7 +87,6 @@ def receive_telemetry():
 
     return jsonify({"status": "success", "data": machine}), 200
 
-# 3. Ruta que consulta el panel web en tiempo real
 @app.route('/api/sync-fleet', methods=['GET'])
 def sync_fleet():
     db = load_data()
