@@ -39,6 +39,8 @@ def receive_telemetry():
 
     if dev_id not in db:
         db[dev_id] = {
+            "mac": dev_id,
+            "device_id": dev_id,
             "name": "Peluchera Mall Plaza",
             "active": True,
             "box_cash": 0,
@@ -48,7 +50,7 @@ def receive_telemetry():
             "status": "online"
         }
 
-    # Cada pulso equivale exactamente a 100 CLP
+    # Cada pulso del billetero equivale exactamente a 100 CLP
     if coins_received > 0:
         monto_clp = coins_received * 100
         db[dev_id]["box_cash"] = db[dev_id].get("box_cash", 0) + monto_clp
@@ -62,7 +64,7 @@ def receive_telemetry():
     db[dev_id]["wifi"] = wifi_signal
     db[dev_id]["status"] = "online"
 
-    # Duplicar nombres de llaves para garantizar compatibilidad total con cualquier index.html
+    # Duplicar nombres de llaves para compatibilidad total con cualquier index.html
     db[dev_id]["caja"] = db[dev_id]["box_cash"]
     db[dev_id]["caja_fisica"] = db[dev_id]["box_cash"]
     db[dev_id]["ventas"] = db[dev_id]["daily_sales"]
@@ -73,13 +75,20 @@ def receive_telemetry():
 
     return jsonify({"status": "success", "data": db[dev_id]}), 200
 
+# IMPORTANTE: Devolvemos los datos como una LISTA de objetos para que el frontend los lea sin error
 @app.route('/api/sync-fleet', methods=['GET'])
 def sync_fleet():
-    return jsonify(load_data()), 200
+    db = load_data()
+    fleet_list = []
+    for mac_key, info in db.items():
+        info["mac"] = mac_key
+        info["device_id"] = mac_key
+        fleet_list.append(info)
+    return jsonify(fleet_list), 200
 
 @app.route('/api/status', methods=['GET'])
 def get_status():
-    return jsonify(load_data()), 200
+    return sync_fleet()
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
