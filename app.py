@@ -8,19 +8,38 @@ CORS(app)
 
 DATABASE_FILE = 'fleet_database.json'
 
+# Máquina por defecto blindada: NUNCA se perderá aunque Render reinicie el servidor
+DEFAULT_DATABASE = {
+    "dailyLedger": [],
+    "machines": [
+        {
+            "mac": "24:6F:28:FF:10:01",
+            "device_id": "24:6F:28:FF:10:01",
+            "name": "Terminal 10:01",
+            "active": True,
+            "box": 0,
+            "sales": 0,
+            "prizes": 0,
+            "wifi": -25,
+            "dailyLogs": {},
+            "withdrawalHistory": []
+        }
+    ]
+}
+
 def load_data():
     if os.path.exists(DATABASE_FILE):
         try:
             with open(DATABASE_FILE, 'r') as f:
                 data = json.load(f)
-                if isinstance(data, dict) and "machines" in data:
+                if isinstance(data, dict) and "machines" in data and len(data["machines"]) > 0:
                     return data
         except Exception as e:
             print(f"⚠️ Error leyendo JSON: {e}")
-    return {
-        "dailyLedger": [],
-        "machines": []
-    }
+    
+    # Si el archivo no existe o está vacío, restauramos con la máquina por defecto
+    save_data(DEFAULT_DATABASE)
+    return DEFAULT_DATABASE
 
 def save_data(data):
     try:
@@ -41,7 +60,6 @@ def receive_telemetry():
         print(f"❌ Error al parsear JSON: {e}")
         return jsonify({"error": "JSON inválido"}), 400
 
-    print(f"📥 [DATOS]: {data}")
     if not data:
         return jsonify({"error": "JSON vacío"}), 400
 
@@ -75,7 +93,7 @@ def receive_telemetry():
         machine = {
             "mac": dev_id,
             "device_id": dev_id,
-            "name": "Terminal 10:01",
+            "name": f"Terminal {dev_id.substring(-5) if len(dev_id)>=5 else 'Nuevo'}",
             "active": True,
             "box": 0,
             "sales": 0,
