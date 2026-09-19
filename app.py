@@ -24,14 +24,24 @@ def save_data(data):
     with open(DATABASE_FILE, 'w') as f:
         json.dump(data, f, indent=4)
 
-# Ruta raíz blindada con send_file para cargar index.html sin errores de ruta
+# Ruta raíz para cargar el panel visual index.html
 @app.route('/')
 def serve_index():
     return send_file('index.html')
 
+# Ruta ultra-robusta para recibir la telemetría del ESP32
 @app.route('/api/telemetry', methods=['POST'])
 def receive_telemetry():
-    data = request.get_json(force=True)
+    try:
+        # Lectura directa y segura del cuerpo de la petición sin importar cabeceras
+        raw_data = request.data.decode('utf-8')
+        data = json.loads(raw_data) if raw_data else {}
+    except Exception as e:
+        print(f"❌ Error al decodificar JSON: {e}")
+        return jsonify({"error": "JSON inválido"}), 400
+
+    print(f"📦 [TELEMETRIA RECIBIDA]: {data}")
+
     if not data:
         return jsonify({"error": "JSON vacío"}), 400
 
@@ -39,9 +49,18 @@ def receive_telemetry():
     if not dev_id:
         return jsonify({"error": "Falta identificador"}), 400
 
-    coins_received = int(data.get('coins', 0))
-    wifi_signal = int(data.get('wifi', -60))
-    prize_status = data.get('prize', '')
+    # Conversión segura a enteros
+    try:
+        coins_received = int(data.get('coins', 0))
+    except:
+        coins_received = 0
+
+    try:
+        wifi_signal = int(data.get('wifi', -60))
+    except:
+        wifi_signal = -60
+
+    prize_status = str(data.get('prize', ''))
 
     db = load_data()
     
@@ -72,13 +91,13 @@ def receive_telemetry():
     # Cada pulso equivale exactamente a 100 CLP
     if coins_received > 0:
         monto_clp = coins_received * 100
-        machine["box"] += monto_clp
-        machine["sales"] += monto_clp
-        print(f"💰 [MONEDA] ¡+{monto_clp} CLP sumados a {dev_id}! Total box: {machine['box']}")
+        machine["box"] = machine.get("box", 0) + monto_clp
+        machine["sales"] = machine.get("sales", 0) + monto_clp
+        print(f"💰 [MONEDA PROCESADA] ¡+{monto_clp} CLP! Total en caja: {machine['box']}")
 
     if prize_status == "dispense":
-        machine["prizes"] += 1
-        print(f"🎁 [PREMIO] ¡Premio registrado en {dev_id}!")
+        machine["prizes"] = machine.get("prizes", 0) + 1
+        print(f"🎁 [PREMIO REGISTRADO]")
 
     machine["wifi"] = wifi_signal
     machine["active"] = True
@@ -97,4 +116,4 @@ def get_status():
     return sync_fleet()
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port5000)
