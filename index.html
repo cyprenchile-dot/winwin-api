@@ -228,6 +228,7 @@
         <div class="letter-page">
             <button class="close-modal-btn" onclick="closeReport()">Cerrar</button>
             <div class="letter-header">
+                <!-- Logotipo vectorial oficial de Inversiones Win Win SpA -->
                 <svg width="55" height="55" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin: 0 auto 6px auto; display: block;">
                     <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
                     <line x1="3" y1="9" x2="21" y2="9"></line>
@@ -437,7 +438,7 @@
                     <div class="machine-footer-actions">
                         <button class="btn-sm btn-pause" onclick="toggleMachine(${index})">${m.active ? 'Pausar' : 'Activar'}</button>
                         <button class="btn-sm btn-danger" onclick="resetMachineBox(${index})">Vaciar Box</button>
-                        <button class="btn-sm btn-report" onclick="openOwnerReport(${index})">📄 Dueño</button>
+                        <button class="btn-sm btn-report" onclick="openOwnerReport(${index})">📊 Gerencial</button>
                         <button class="btn-sm btn-client" onclick="openClientReport(${index})">🤝 Local</button>
                         <button class="btn-sm btn-delete" onclick="deleteMachine(${index})">🗑️</button>
                     </div>
@@ -565,10 +566,10 @@
             alert("¡Máquina registrada y ubicada con éxito en el mapa!");
         }
 
-        // 1. INFORME EXCLUSIVO PARA DUEÑOS (Con costos, utilidad y auditoría)
+        // 1. INFORME GERENCIAL / PROPIETARIOS (Con logotipo oficial, costos, utilidad y auditoría)
         function openOwnerReport(index) {
             const m = machines[index];
-            document.getElementById('report-title').innerText = `INFORME GERENCIAL (PROPIETARIOS) - ${m.name.toUpperCase()}`;
+            document.getElementById('report-title').innerText = `INFORME GERENCIAL - ${m.name.toUpperCase()}`;
             document.getElementById('report-date').innerText = `Emisión: ${new Date().toLocaleString()}`;
 
             let totalVenta = m.sales || 0;
