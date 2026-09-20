@@ -48,11 +48,11 @@
         .card .value { font-size: 1.4rem; font-weight: 800; color: #fff; text-shadow: 0 2px 4px rgba(0,0,0,0.3); }
         .card .subtext { font-size: 0.65rem; color: var(--accent-green); margin-top: 4px; font-weight: 600; }
 
-        /* SECCIÓN DE MAPA GENERAL DE CHILE */
+        /* SECCIÓN DE MAPA GENERAL DE CHILE (Ubicada por debajo de las estadísticas) */
         .map-section { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 15px; margin-bottom: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
         .map-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
         .map-header h2 { font-size: 0.85rem; color: var(--text-main); font-weight: 600; }
-        #chileMap { width: 100%; height: 320px; border-radius: 8px; border: 1px solid var(--border-color); z-index: 1; }
+        #chileMap { width: 100%; height: 400px; border-radius: 8px; border: 1px solid var(--border-color); z-index: 1; }
 
         /* SECCIÓN DE MÁQUINAS */
         .machines-section { margin-bottom: 15px; }
@@ -139,7 +139,7 @@
         </div>
     </header>
 
-    <!-- CONTADORES DESTACADOS -->
+    <!-- CONTADORES DESTACADOS (ESTADÍSTICAS) -->
     <div class="metrics-grid">
         <div class="card">
             <h3>Terminales Activos</h3>
@@ -173,7 +173,7 @@
         </div>
     </div>
 
-    <!-- MAPA GENERAL DE CHILE DE LA FLOTA -->
+    <!-- MAPA GENERAL DE CHILE (Ubicado justo por debajo de las estadísticas) -->
     <div class="map-section">
         <div class="map-header">
             <h2>🗺️ Mapa de Flota en Terreno (Chile)</h2>
@@ -260,19 +260,24 @@
             }
         }, { once: true });
 
-        // Inicialización del Mapa General de Chile
-        const chileMap = L.map('chileMap').setView([-33.4489, -70.6693], 7); // Centrado inicialmente en Santiago/Colina
+        // Inicialización del Mapa General de Chile con corrección de tamaño automáticos
+        const chileMap = L.map('chileMap').setView([-33.4489, -70.6693], 6); 
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 18,
             attribution: '© OpenStreetMap'
-        }).addTochileMap ? chileMap.addLayer(L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 18})) : null;
+        }).addTo(chileMap);
+
+        // Forzar actualización del mapa tras la carga completa
+        setTimeout(() => {
+            chileMap.invalidateSize();
+        }, 500);
 
         let fleetMarkers = [];
         let pickerMap = null;
         let pickerMarker = null;
         let tempMac = '';
         let tempName = '';
-        let selectedLat = -33.2200; // Por defecto Colina, Santiago
+        let selectedLat = -33.2200; 
         let selectedLng = -70.6700;
 
         function updateMapMarkers(list) {
@@ -376,6 +381,9 @@
             renderMachineBoxes(machines);
             renderLedger();
             updateMapMarkers(machines);
+            
+            // Refrescar tamaño del mapa al actualizar la interfaz
+            setTimeout(() => { chileMap.invalidateSize(); }, 200);
         }
 
         function renderLedger() {
@@ -510,7 +518,6 @@
             tempName = prompt("Nombre o ubicación (ej: Peluchera Local Colina):");
             if(!tempName) tempName = 'Terminal Terreno';
 
-            // Mostrar modal de mapa para seleccionar ubicación tocando la pantalla
             document.getElementById('map-modal').style.display = 'flex';
             setTimeout(() => {
                 if(!pickerMap) {
