@@ -56,7 +56,7 @@
         @media(min-width: 768px) { .search-input { width: 260px; } }
 
         .machines-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
-        @media(min-width: 768px) { .machines-grid { grid-template-columns: repeat(auto-fill, minmax(440px, 1fr)); gap: 15px; } }
+        @media(min-width: 768px) { .machines-grid { grid-template-columns: repeat(auto-fill, minmax(460px, 1fr)); gap: 15px; } }
 
         .machine-box { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 15px; position: relative; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
         .machine-header-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; }
@@ -73,11 +73,12 @@
         .stat-box span { display: block; font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 2px; font-weight: 600; }
         .stat-box b { font-size: 0.95rem; color: #fff; font-weight: 700; }
 
-        .machine-footer-actions { display: flex; gap: 6px; flex-wrap: wrap; }
-        .btn-sm { padding: 6px 10px; font-size: 0.7rem; border-radius: 5px; border: none; font-weight: bold; cursor: pointer; flex: 1; text-align: center; }
+        .machine-footer-actions { display: flex; gap: 5px; flex-wrap: wrap; }
+        .btn-sm { padding: 6px 8px; font-size: 0.65rem; border-radius: 5px; border: none; font-weight: bold; cursor: pointer; flex: 1; text-align: center; }
         .btn-pause { background: #3b82f6; color: white; }
         .btn-danger { background: #ef4444; color: white; }
         .btn-report { background: var(--accent-purple); color: white; }
+        .btn-client { background: #0284c7; color: white; }
         .btn-delete { background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); }
         .btn-delete:hover { background: #ef4444; color: white; }
 
@@ -134,7 +135,7 @@
         <div class="status-badge" id="server-status">ONLINE</div>
         <div class="header-actions" style="margin-top: 8px;">
             <button class="btn" onclick="startRegisterMachine()">+ Registrar MAC</button>
-            <button class="btn btn-purple" onclick="openGlobalReport()">📄 Informe Mensual / Flota</button>
+            <button class="btn btn-purple" onclick="openGlobalReport()">📄 Inf. Mensual Flota</button>
             <button class="btn btn-danger" onclick="resetGlobalBox()" style="flex:unset;">Vaciar Caja Global</button>
         </div>
     </header>
@@ -234,7 +235,7 @@
                 </svg>
                 <h1>INVERSIONES WIN WIN SpA</h1>
                 <span>R.U.T.: 78.498.679-9 | DEPARTAMENTO DE TELEMETRÍA Y FINANZAS</span>
-                <h2 id="report-title" style="margin-top: 10px; font-size: 1rem; color: #222;">REPORTE DE CIERRE Y BALANCE CONTABLE</h2>
+                <h2 id="report-title" style="margin-top: 10px; font-size: 1rem; color: #222;">REPORTE OFICIAL</h2>
                 <p id="report-date" style="margin-top: 3px; font-size: 0.75rem; color: #555;"></p>
             </div>
             <div id="report-content-body"></div>
@@ -435,9 +436,10 @@
                     </div>
                     <div class="machine-footer-actions">
                         <button class="btn-sm btn-pause" onclick="toggleMachine(${index})">${m.active ? 'Pausar' : 'Activar'}</button>
-                        <button class="btn-sm btn-danger" onclick="resetMachineBox(${index})">Vaciar Box (Retiro)</button>
-                        <button class="btn-sm btn-report" onclick="openMachineReport(${index})">📄 Informe</button>
-                        <button class="btn-sm btn-delete" onclick="deleteMachine(${index})">🗑️ Eliminar</button>
+                        <button class="btn-sm btn-danger" onclick="resetMachineBox(${index})">Vaciar Box</button>
+                        <button class="btn-sm btn-report" onclick="openOwnerReport(${index})">📄 Dueño</button>
+                        <button class="btn-sm btn-client" onclick="openClientReport(${index})">🤝 Local</button>
+                        <button class="btn-sm btn-delete" onclick="deleteMachine(${index})">🗑️</button>
                     </div>
                 `;
                 container.appendChild(boxDiv);
@@ -563,9 +565,10 @@
             alert("¡Máquina registrada y ubicada con éxito en el mapa!");
         }
 
-        function openMachineReport(index) {
+        // 1. INFORME EXCLUSIVO PARA DUEÑOS (Con costos, utilidad y auditoría)
+        function openOwnerReport(index) {
             const m = machines[index];
-            document.getElementById('report-title').innerText = `INFORME CONTABLE - ${m.name.toUpperCase()}`;
+            document.getElementById('report-title').innerText = `INFORME GERENCIAL (PROPIETARIOS) - ${m.name.toUpperCase()}`;
             document.getElementById('report-date').innerText = `Emisión: ${new Date().toLocaleString()}`;
 
             let totalVenta = m.sales || 0;
@@ -601,7 +604,7 @@
                     <p><b>Venta Bruta Acumulada:</b> $${totalVenta.toLocaleString()} CLP</p>
                     <p><b>Costo Total Premios (${totalPremiosEntregados} un. x $1.250):</b> -$${costoTotalPremios.toLocaleString()} CLP</p>
                     <p><b>Utilidad Bruta Estimada:</b> <span style="color: #16a34a; font-weight: bold;">$${utilidadBruta.toLocaleString()} CLP</span></p>
-                    <p><b>Estado Actual de Caja (Box):</b> $${(m.box || 0).toLocaleString()} CLP</p>
+                    <p><b>Efectivo Actual en Caja (Box):</b> $${(m.box || 0).toLocaleString()} CLP</p>
                 </div>
                 <p><b>💵 Historial de Retiros de Efectivo (Auditoría):</b></p>
                 <table class="letter-table" style="margin-top:5px; margin-bottom:15px;">
@@ -613,6 +616,42 @@
                     <thead><tr><th>Fecha</th><th>Venta Diaria</th><th>Premios (Costo)</th><th>Utilidad Bruta</th></tr></thead>
                     <tbody>${logsHtml}</tbody>
                 </table>
+            `;
+            document.getElementById('print-modal').style.display = 'flex';
+        }
+
+        // 2. INFORME PARA EL CLIENTE / DUEÑO DEL LOCAL (Sin costos de reposición, solo ventas y premios entregados)
+        function openClientReport(index) {
+            const m = machines[index];
+            document.getElementById('report-title').innerText = `REPORTE DE OPERACIÓN Y RENDIMIENTO - ${m.name.toUpperCase()}`;
+            document.getElementById('report-date').innerText = `Emisión: ${new Date().toLocaleString()}`;
+
+            let totalVenta = m.sales || 0;
+            let totalPremiosEntregados = m.prizes || 0;
+
+            let logsHtml = '';
+            if(m.dailyLogs && Object.keys(m.dailyLogs).length > 0) {
+                for(let date in m.dailyLogs) {
+                    let vDia = m.dailyLogs[date].sales || 0;
+                    let pDia = m.dailyLogs[date].prizes || 0;
+                    logsHtml += `<tr><td>${date}</td><td>$${vDia.toLocaleString()} CLP</td><td>${pDia} un. entregados</td></tr>`;
+                }
+            } else {
+                logsHtml = `<tr><td colspan="3" style="text-align:center;">Registros diarios acumulándose automáticamente.</td></tr>`;
+            }
+
+            document.getElementById('report-content-body').innerHTML = `
+                <div style="margin-bottom: 15px; font-size: 0.85rem; line-height: 1.5; border: 1px solid #cbd5e1; padding: 12px; border-radius: 6px; background: #f8fafc;">
+                    <p style="margin-bottom: 6px;"><b>Ubicación / Terminal:</b> ${m.name}</p>
+                    <p style="margin-bottom: 6px;"><b>Venta Total Acumulada:</b> <span style="font-size: 1.1rem; color: #0284c7; font-weight: bold;">$${totalVenta.toLocaleString()} CLP</span></p>
+                    <p><b>Total Premios Entregados a Clientes:</b> <span style="font-weight: bold;">${totalPremiosEntregados} un.</span></p>
+                </div>
+                <p style="margin-top: 15px; margin-bottom: 5px;"><b>📅 Resumen de Actividad Diaria en Local:</b></p>
+                <table class="letter-table" style="margin-top:5px;">
+                    <thead><tr><th>Fecha</th><th>Venta Total</th><th>Premios Entregados</th></tr></thead>
+                    <tbody>${logsHtml}</tbody>
+                </table>
+                <p style="margin-top: 20px; font-size: 0.75rem; color: #64748b; text-align: center;">Este documento certifica la actividad operacional de la terminal en el establecimiento.</p>
             `;
             document.getElementById('print-modal').style.display = 'flex';
         }
