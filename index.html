@@ -93,7 +93,7 @@
         .ledger-row { display: flex; justify-content: space-between; padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.05); }
         .ledger-row:last-child { border-bottom: none; }
 
-        /* MAPA GENERAL DE CHILE (Ubicado en la parte inferior de todo) */
+        /* MAPA GENERAL DE CHILE */
         .map-section { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 15px; margin-bottom: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
         .map-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
         .map-header h2 { font-size: 0.85rem; color: var(--text-main); font-weight: 600; }
@@ -159,7 +159,7 @@
         <div class="card" style="border-left: 3px solid var(--accent-purple);">
             <h3>Premios Totales</h3>
             <div class="value" id="total-prizes">0 un.</div>
-            <div class="subtext">Dispensador</div>
+            <div class="subtext">Dispensador ($1.250 c/u)</div>
         </div>
         <div class="card">
             <h3>Señal Wi-Fi Promedio</h3>
@@ -200,7 +200,7 @@
         </div>
     </div>
 
-    <!-- MAPA GENERAL DE CHILE (Ubicado ahora en la parte inferior de todo) -->
+    <!-- MAPA GENERAL DE CHILE -->
     <div class="map-section">
         <div class="map-header">
             <h2>🗺️ Mapa de Flota en Terreno (Chile)</h2>
@@ -234,7 +234,7 @@
                 </svg>
                 <h1>INVERSIONES WIN WIN SpA</h1>
                 <span>R.U.T.: 78.498.679-9 | DEPARTAMENTO DE TELEMETRÍA Y FINANZAS</span>
-                <h2 id="report-title" style="margin-top: 10px; font-size: 1rem; color: #222;">REPORTE DE CIERRE Y BITÁCORA DIARIA</h2>
+                <h2 id="report-title" style="margin-top: 10px; font-size: 1rem; color: #222;">REPORTE DE CIERRE Y BALANCE CONTABLE</h2>
                 <p id="report-date" style="margin-top: 3px; font-size: 0.75rem; color: #555;"></p>
             </div>
             <div id="report-content-body"></div>
@@ -251,6 +251,8 @@
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
+        const COSTO_PREMIO = 1250; // Constante contable por unidad de muñeco/premio
+
         let audioCtx = null;
         document.addEventListener('click', () => {
             if (!audioCtx) {
@@ -267,9 +269,7 @@
             attribution: '© OpenStreetMap'
         }).addTo(chileMap);
 
-        setTimeout(() => {
-            chileMap.invalidateSize();
-        }, 500);
+        setTimeout(() => { chileMap.invalidateSize(); }, 500);
 
         let fleetMarkers = [];
         let pickerMap = null;
@@ -294,8 +294,11 @@
                     iconSize: [14, 14]
                 });
 
+                let costoPremiosM = (m.prizes || 0) * COSTO_PREMIO;
+                let utilidadM = (m.sales || 0) - costoPremiosM;
+
                 let marker = L.marker([lat, lng], {icon: customIcon}).addTo(chileMap);
-                marker.bindPopup(`<b>${m.name}</b><br>Caja: $${(m.box||0).toLocaleString()} CLP<br>Estado: ${m.active ? 'Activa' : 'Pausada'}`);
+                marker.bindPopup(`<b>${m.name}</b><br>Venta: $${(m.sales||0).toLocaleString()} CLP<br>Utilidad: $${utilidadM.toLocaleString()} CLP<br>Estado: ${m.active ? 'Activa' : 'Pausada'}`);
                 fleetMarkers.push(marker);
             });
         }
@@ -365,7 +368,7 @@
             let totalBox = machines.reduce((acc, m) => acc + (m.box || 0), 0);
             let totalPrizes = machines.reduce((acc, m) => acc + (m.prizes || 0), 0);
             let avgWifi = machines.length > 0 ? Math.round(machines.reduce((acc, m) => acc + (m.wifi || -50), 0) / machines.length) : 0;
-            let efficiency = totalPrizes > 0 ? Math.min(100, Math.round((totalPrizes * 500 / (totalDaily || 1)) * 100)) : 0;
+            let efficiency = totalPrizes > 0 ? Math.min(100, Math.round((totalPrizes * COSTO_PREMIO / (totalDaily || 1)) * 100)) : 0;
 
             document.getElementById('daily-sales').innerText = `$${totalDaily.toLocaleString()} CLP`;
             document.getElementById('box-total').innerText = `$${totalBox.toLocaleString()} CLP`;
@@ -408,6 +411,9 @@
             }
             listToRender.forEach((m) => {
                 const index = machines.findIndex(item => item.mac === m.mac);
+                let costoPremiosM = (m.prizes || 0) * COSTO_PREMIO;
+                let utilidadBrutaM = (m.sales || 0) - costoPremiosM;
+
                 const boxDiv = document.createElement('div');
                 boxDiv.className = `machine-box`;
                 boxDiv.innerHTML = `
@@ -423,9 +429,9 @@
                     </div>
                     <div class="machine-stats-grid">
                         <div class="stat-box"><span>CAJA FÍSICA (BOX)</span><b>$${m.box.toLocaleString()} CLP</b></div>
-                        <div class="stat-box"><span>PREMIOS</span><b>${m.prizes || 0} un.</b></div>
-                        <div class="stat-box"><span>SEÑAL WI-FI</span><b>${m.wifi} dBm</b></div>
+                        <div class="stat-box"><span>PREMIOS ENTREGADOS</span><b>${m.prizes || 0} un.</b></div>
                         <div class="stat-box"><span>VENTA DÍA (AUTO)</span><b>$${m.sales.toLocaleString()} CLP</b></div>
+                        <div class="stat-box"><span>UTILIDAD BRUTA</span><b style="color: var(--accent-green);">$${utilidadBrutaM.toLocaleString()} CLP</b></div>
                     </div>
                     <div class="machine-footer-actions">
                         <button class="btn-sm btn-pause" onclick="toggleMachine(${index})">${m.active ? 'Pausar' : 'Activar'}</button>
@@ -559,16 +565,25 @@
 
         function openMachineReport(index) {
             const m = machines[index];
-            document.getElementById('report-title').innerText = `INFORME DETALLADO - ${m.name.toUpperCase()}`;
+            document.getElementById('report-title').innerText = `INFORME CONTABLE - ${m.name.toUpperCase()}`;
             document.getElementById('report-date').innerText = `Emisión: ${new Date().toLocaleString()}`;
+
+            let totalVenta = m.sales || 0;
+            let totalPremiosEntregados = m.prizes || 0;
+            let costoTotalPremios = totalPremiosEntregados * COSTO_PREMIO;
+            let utilidadBruta = totalVenta - costoTotalPremios;
 
             let logsHtml = '';
             if(m.dailyLogs && Object.keys(m.dailyLogs).length > 0) {
                 for(let date in m.dailyLogs) {
-                    logsHtml += `<tr><td>${date}</td><td>$${m.dailyLogs[date].sales.toLocaleString()} CLP</td><td>${m.dailyLogs[date].prizes} un.</td></tr>`;
+                    let vDia = m.dailyLogs[date].sales || 0;
+                    let pDia = m.dailyLogs[date].prizes || 0;
+                    let cDia = pDia * COSTO_PREMIO;
+                    let uDia = vDia - cDia;
+                    logsHtml += `<tr><td>${date}</td><td>$${vDia.toLocaleString()} CLP</td><td>${pDia} un. ($${cDia.toLocaleString()})</td><td style="color:var(--accent-green); font-weight:bold;">$${uDia.toLocaleString()} CLP</td></tr>`;
                 }
             } else {
-                logsHtml = `<tr><td colspan="3" style="text-align:center;">Registros diarios acumulándose automáticamente.</td></tr>`;
+                logsHtml = `<tr><td colspan="4" style="text-align:center;">Registros diarios acumulándose automáticamente.</td></tr>`;
             }
 
             let withdrawalsHtml = '';
@@ -581,18 +596,21 @@
             }
 
             document.getElementById('report-content-body').innerHTML = `
-                <div style="margin-bottom: 12px; font-size: 0.8rem; line-height: 1.4;">
+                <div style="margin-bottom: 15px; font-size: 0.85rem; line-height: 1.5; border: 1px solid #cbd5e1; padding: 10px; border-radius: 6px; background: #f8fafc;">
                     <p><b>MAC:</b> <code>${m.mac}</code></p>
-                    <p><b>Estado Actual de Caja (Box):</b> $${m.box.toLocaleString()} CLP</p>
+                    <p><b>Venta Bruta Acumulada:</b> $${totalVenta.toLocaleString()} CLP</p>
+                    <p><b>Costo Total Premios (${totalPremiosEntregados} un. x $1.250):</b> -$${costoTotalPremios.toLocaleString()} CLP</p>
+                    <p><b>Utilidad Bruta Estimada:</b> <span style="color: #16a34a; font-weight: bold;">$${utilidadBruta.toLocaleString()} CLP</span></p>
+                    <p><b>Estado Actual de Caja (Box):</b> $${(m.box || 0).toLocaleString()} CLP</p>
                 </div>
                 <p><b>💵 Historial de Retiros de Efectivo (Auditoría):</b></p>
                 <table class="letter-table" style="margin-top:5px; margin-bottom:15px;">
                     <thead><tr><th>Fecha y Hora</th><th>Responsable</th><th>Monto Retirado</th><th>Observación</th></tr></thead>
                     <tbody>${withdrawalsHtml}</tbody>
                 </table>
-                <p><b>📅 Historial de Rendimiento Diario:</b></p>
+                <p><b>📅 Historial de Rendimiento Financiero Diario:</b></p>
                 <table class="letter-table" style="margin-top:5px;">
-                    <thead><tr><th>Fecha</th><th>Venta Diaria</th><th>Premios</th></tr></thead>
+                    <thead><tr><th>Fecha</th><th>Venta Diaria</th><th>Premios (Costo)</th><th>Utilidad Bruta</th></tr></thead>
                     <tbody>${logsHtml}</tbody>
                 </table>
             `;
@@ -600,29 +618,38 @@
         }
 
         function openGlobalReport() {
-            document.getElementById('report-title').innerText = `INFORME MENSUAL OFICIAL - FLOTA WINWIN`;
+            document.getElementById('report-title').innerText = `INFORME FINANCIERO MENSUAL - FLOTA WINWIN`;
             document.getElementById('report-date').innerText = `Emisión: ${new Date().toLocaleString()}`;
 
             let totalBox = machines.reduce((a,b)=>a+b.box,0);
+            let totalSales = machines.reduce((a,b)=>a+(b.sales||0),0);
             let totalPrizes = machines.reduce((a,b)=>a+(b.prizes||0),0);
+            let costoGlobalPremios = totalPrizes * COSTO_PREMIO;
+            let utilidadGlobalBruta = totalSales - costoGlobalPremios;
 
             let tableRows = '';
             if(machines.length === 0) {
-                tableRows = `<tr><td colspan="5" style="text-align:center;">No hay terminales activos en la flota.</td></tr>`;
+                tableRows = `<tr><td colspan="6" style="text-align:center;">No hay terminales activos en la flota.</td></tr>`;
             } else {
                 machines.forEach(m => {
-                    tableRows += `<tr><td><b>${m.name}</b><br><code style="font-size:0.65rem">${m.mac}</code></td><td>$${m.box.toLocaleString()}</td><td>$${m.sales.toLocaleString()}</td><td>${m.prizes || 0}</td><td>${m.active ? 'Activa' : 'Pausada'}</td></tr>`;
+                    let vM = m.sales || 0;
+                    let pM = m.prizes || 0;
+                    let cM = pM * COSTO_PREMIO;
+                    let uM = vM - cM;
+                    tableRows += `<tr><td><b>${m.name}</b><br><code style="font-size:0.65rem">${m.mac}</code></td><td>$${(m.box||0).toLocaleString()}</td><td>$${vM.toLocaleString()}</td><td>${pM} un.</td><td>$${cM.toLocaleString()}</td><td style="font-weight:bold; color:#16a34a;">$${uM.toLocaleString()}</td></tr>`;
                 });
             }
 
             document.getElementById('report-content-body').innerHTML = `
-                <div style="margin-bottom: 12px; font-size: 0.8rem; line-height: 1.4;">
-                    <p><b>Total Terminales:</b> ${machines.length}</p>
-                    <p><b>Caja Global Acumulada (Efectivo Actual):</b> $${totalBox.toLocaleString()} CLP</p>
-                    <p><b>Premios Totales Flota:</b> ${totalPrizes} un.</p>
+                <div style="margin-bottom: 15px; font-size: 0.85rem; line-height: 1.5; border: 1px solid #cbd5e1; padding: 10px; border-radius: 6px; background: #f8fafc;">
+                    <p><b>Total Terminales en Flota:</b> ${machines.length}</p>
+                    <p><b>Venta Bruta Total de Flota:</b> $${totalSales.toLocaleString()} CLP</p>
+                    <p><b>Costo Total de Premios (${totalPrizes} un. totales):</b> -$${costoGlobalPremios.toLocaleString()} CLP</p>
+                    <p><b>Utilidad Bruta Global de Flota:</b> <span style="color: #16a34a; font-weight: bold;">$${utilidadGlobalBruta.toLocaleString()} CLP</span></p>
+                    <p><b>Efectivo Actual en Cajas (Box):</b> $${totalBox.toLocaleString()} CLP</p>
                 </div>
                 <table class="letter-table">
-                    <thead><tr><th>Máquina (MAC)</th><th>Caja Física Actual</th><th>Venta Hoy</th><th>Premios</th><th>Estado</th></tr></thead>
+                    <thead><tr><th>Máquina (MAC)</th><th>Caja Física</th><th>Venta Bruta</th><th>Premios</th><th>Costo Premios</th><th>Utilidad Bruta</th></tr></thead>
                     <tbody>${tableRows}</tbody>
                 </table>
             `;
