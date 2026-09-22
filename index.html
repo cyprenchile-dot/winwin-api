@@ -6,6 +6,8 @@
     <title>Inversiones WinWin SpA - Telemetría Pro</title>
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Leaflet CSS para el Mapa Interactivo -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         :root {
             --bg-color: #070a14;
@@ -104,6 +106,16 @@
         .letter-table th { background: #f1f5f9; color: #000; font-weight: 700; }
         .close-modal-btn { position: absolute; top: 15px; right: 15px; background: #ef4444; color: white; border: none; padding: 6px 12px; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 0.75rem; }
 
+        /* MODAL DE EDICIÓN CON MAPA */
+        #edit-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 1100; justify-content: center; align-items: center; padding: 15px; }
+        .edit-box { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; width: 100%; max-width: 500px; padding: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); color: #fff; }
+        .edit-box h2 { font-size: 1rem; margin-bottom: 12px; color: var(--text-main); }
+        .edit-group { margin-bottom: 10px; }
+        .edit-group label { display: block; font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px; }
+        .edit-group input { width: 100%; background: #070a14; border: 1px solid var(--border-color); color: #fff; padding: 8px; border-radius: 6px; font-size: 0.85rem; outline: none; }
+        #map { width: 100%; height: 220px; border-radius: 8px; margin-top: 8px; border: 1px solid var(--border-color); }
+        .edit-actions { display: flex; gap: 8px; margin-top: 15px; }
+
         @media print {
             body * { visibility: hidden; }
             #print-modal, #print-modal * { visibility: visible; }
@@ -112,6 +124,8 @@
             .letter-page { box-shadow: none; margin: 0; width: 100%; padding: 1cm; }
         }
     </style>
+    <!-- Leaflet JS para el Mapa Interactivo -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body>
 
@@ -189,6 +203,30 @@
         </div>
     </div>
 
+    <!-- MODAL DE EDICIÓN CON MAPA INTERACTIVO -->
+    <div id="edit-modal">
+        <div class="edit-box">
+            <h2>✏️ Editar Terminal y Ubicación GPS</h2>
+            <input type="hidden" id="edit-index">
+            <div class="edit-group">
+                <label>Nombre de la Terminal:</label>
+                <input type="text" id="edit-name" placeholder="Ej: Peluchera Local Sur">
+            </div>
+            <div class="edit-group">
+                <label>Nombre del Local o Referencia:</label>
+                <input type="text" id="edit-location" placeholder="Ej: Mall Plaza / Local 102">
+            </div>
+            <div class="edit-group">
+                <label>Pin de Ubicación en el Mapa (Haz clic para mover):</label>
+                <div id="map"></div>
+            </div>
+            <div class="edit-actions">
+                <button class="btn btn-secondary" onclick="saveEditedMachine()">Guardar Cambios</button>
+                <button class="btn btn-danger" onclick="closeEditModal()" style="flex:unset;">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
     <!-- MODAL DE INFORME TAMAÑO CARTA -->
     <div id="print-modal">
         <div class="letter-page">
@@ -225,46 +263,6 @@
             }
         }, { once: true });
 
-        function playCoinSound() {
-            try {
-                if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                if (audioCtx.state === 'suspended') audioCtx.resume();
-                const freqs = [1760, 2637]; 
-                freqs.forEach((freq, index) => {
-                    const osc = audioCtx.createOscillator();
-                    const gain = audioCtx.createGain();
-                    osc.type = 'sine';
-                    osc.frequency.setValueAtTime(freq, audioCtx.currentTime + (index * 0.04));
-                    gain.gain.setValueAtTime(0.25, audioCtx.currentTime + (index * 0.04));
-                    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.35 + (index * 0.04));
-                    osc.connect(gain);
-                    gain.connect(audioCtx.destination);
-                    osc.start(audioCtx.currentTime + (index * 0.04));
-                    osc.stop(audioCtx.currentTime + 0.35 + (index * 0.04));
-                });
-            } catch(e) {}
-        }
-
-        function playPrizeSound() {
-            try {
-                if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                if (audioCtx.state === 'suspended') audioCtx.resume();
-                const notes = [523.25, 659.25, 783.99, 1046.50];
-                notes.forEach((freq, index) => {
-                    const osc = audioCtx.createOscillator();
-                    const gain = audioCtx.createGain();
-                    osc.type = 'triangle';
-                    osc.frequency.setValueAtTime(freq, audioCtx.currentTime + (index * 0.08));
-                    gain.gain.setValueAtTime(0.3, audioCtx.currentTime + (index * 0.08));
-                    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4 + (index * 0.08));
-                    osc.connect(gain);
-                    gain.connect(audioCtx.destination);
-                    osc.start(audioCtx.currentTime + (index * 0.08));
-                    osc.stop(audioCtx.currentTime + 0.4 + (index * 0.08));
-                });
-            } catch(e) {}
-        }
-
         const ctx = document.getElementById('salesChart').getContext('2d');
         const salesChart = new Chart(ctx, {
             type: 'line',
@@ -293,6 +291,10 @@
 
         let machines = [];
         let dailyLedger = [];
+        let editMap = null;
+        let editMarker = null;
+        let selectedLat = -33.4489; // Santiago por defecto
+        let selectedLng = -70.6693;
 
         async function saveStateAndSync() {
             try {
@@ -391,7 +393,7 @@
                         <div class="stat-box"><span>VENTA DÍA (AUTO)</span><b>$${m.sales.toLocaleString()} CLP</b></div>
                     </div>
                     <div class="machine-footer-actions">
-                        <button class="btn-sm btn-edit" onclick="editMachine(${index})">✏️ Editar</button>
+                        <button class="btn-sm btn-edit" onclick="openEditModal(${index})">✏️ Editar</button>
                         <button class="btn-sm btn-pause" onclick="toggleMachine(${index})">${m.active ? 'Pausar' : 'Activar'}</button>
                         <button class="btn-sm btn-danger" onclick="resetMachineBox(${index})">Vaciar Box (Retiro)</button>
                         <button class="btn-sm btn-report" onclick="openMachineReport(${index})">📄 Informe</button>
@@ -408,19 +410,64 @@
             renderMachineBoxes(filtered);
         }
 
-        // --- NUEVA FUNCIÓN PARA EDITAR NOMBRE Y UBICACIÓN ---
-        async function editMachine(index) {
+        // --- SISTEMA DE EDICIÓN CON MAPA INTERACTIVO ---
+        function openEditModal(index) {
             let m = machines[index];
-            let newName = prompt("Edita el nombre de la terminal:", m.name || '');
-            if (newName === null) return;
-            let newLocation = prompt("Edita la ubicación o local:", m.location || 'Local por definir');
-            if (newLocation === null) return;
+            document.getElementById('edit-index').value = index;
+            document.getElementById('edit-name').value = m.name || '';
+            document.getElementById('edit-location').value = m.location || '';
 
-            m.name = newName;
-            m.location = newLocation;
+            selectedLat = m.lat || -33.4489;
+            selectedLng = m.lng || -70.6693;
+
+            document.getElementById('edit-modal').style.display = 'flex';
+
+            // Inicializar o actualizar mapa de Leaflet
+            setTimeout(() => {
+                if (!editMap) {
+                    editMap = L.map('map').setView([selectedLat, selectedLng], 13);
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        attribution: '&copy; OpenStreetMap contributors'
+                    }).addTo(editMap);
+
+                    editMarker = L.marker([selectedLat, selectedLng], { draggable: true }).addTo(editMap);
+
+                    editMarker.on('dragend', function (e) {
+                        let pos = editMarker.getLatLng();
+                        selectedLat = pos.lat;
+                        selectedLng = pos.lng;
+                    });
+
+                    editMap.on('click', function (e) {
+                        selectedLat = e.latlng.lat;
+                        selectedLng = e.latlng.lng;
+                        editMarker.setLatLng([selectedLat, selectedLng]);
+                    });
+                } else {
+                    editMap.invalidateSize();
+                    editMap.setView([selectedLat, selectedLng], 13);
+                    editMarker.setLatLng([selectedLat, selectedLng]);
+                }
+            }, 300);
+        }
+
+        function closeEditModal() {
+            document.getElementById('edit-modal').style.display = 'none';
+        }
+
+        async function saveEditedMachine() {
+            let index = document.getElementById('edit-index').value;
+            let m = machines[index];
+
+            m.name = document.getElementById('edit-name').value || 'Terminal Terreno';
+            m.location = document.getElementById('edit-location').value || 'Local por definir';
+            m.lat = selectedLat;
+            m.lng = selectedLng;
+
             await saveStateAndSync();
             updateUI();
-            alert("¡Información actualizada con éxito!");
+            closeEditModal();
+            alert("¡Información y ubicación guardadas con éxito!");
         }
 
         async function resetGlobalBox() {
@@ -498,6 +545,8 @@
                     mac: macInput, 
                     name: nameInput || 'Terminal Terreno', 
                     location: locInput || 'Local Principal',
+                    lat: -33.4489,
+                    lng: -70.6693,
                     sales: 0, box: 0, prizes: 0, wifi: -50, active: true, dailyLogs: {}, withdrawalHistory: [] 
                 });
                 await saveStateAndSync();
@@ -533,6 +582,7 @@
                 <div style="margin-bottom: 12px; font-size: 0.8rem; line-height: 1.4;">
                     <p><b>MAC:</b> <code>${m.mac}</code></p>
                     <p><b>Ubicación:</b> ${m.location || 'Local por definir'}</p>
+                    <p><b>Coordenadas GPS:</b> ${m.lat ? m.lat.toFixed(4) + ', ' + m.lng.toFixed(4) : 'No registradas'}</p>
                     <p><b>Estado Actual de Caja (Box):</b> $${m.box.toLocaleString()} CLP</p>
                 </div>
                 <p><b>💵 Historial de Retiros de Efectivo (Auditoría):</b></p>
