@@ -1,3 +1,58 @@
+from flask import Flask, request, jsonify, send_file
+from flask_cors import CORS
+import json
+import os
+import time
+
+app = Flask(__name__)
+CORS(app)
+
+DATABASE_FILE = 'fleet_database.json'
+
+DEFAULT_DATABASE = {
+    "dailyLedger": [],
+    "machines": [
+        {
+            "mac": "24:6F:28:FF:10:01",
+            "device_id": "24:6F:28:FF:10:01",
+            "name": "Terminal 10:01",
+            "location": "Local Principal",
+            "active": True,
+            "box": 0,
+            "sales": 0,
+            "prizes": 0,
+            "wifi": -25,
+            "last_seen": time.time(),
+            "dailyLogs": {},
+            "withdrawalHistory": []
+        }
+    ]
+}
+
+def load_data():
+    if os.path.exists(DATABASE_FILE):
+        try:
+            with open(DATABASE_FILE, 'r') as f:
+                data = json.load(f)
+                if isinstance(data, dict) and "machines" in data and len(data["machines"]) > 0:
+                    return data
+        except Exception as e:
+            print(f"⚠️ Error leyendo JSON: {e}")
+    
+    save_data(DEFAULT_DATABASE)
+    return DEFAULT_DATABASE
+
+def save_data(data):
+    try:
+        with open(DATABASE_FILE, 'w') as f:
+            json.dump(data, f, indent=4)
+    except Exception as e:
+        print(f"⚠️ Error guardando JSON: {e}")
+
+@app.route('/')
+def serve_index():
+    return send_file('index.html')
+
 @app.route('/api/telemetry', methods=['POST'])
 def receive_telemetry():
     try:
@@ -23,7 +78,6 @@ def receive_telemetry():
         wifi_signal = -60
 
     prize_status = str(data.get('prize', ''))
-    is_active = data.get('active')
 
     db = load_data()
     if "machines" not in db:
@@ -35,7 +89,6 @@ def receive_telemetry():
             machine = m
             break
 
-    # Si la MAC no existe, se crea por única vez con un nombre base
     if not machine:
         machine = {
             "mac": dev_id,
@@ -47,12 +100,12 @@ def receive_telemetry():
             "sales": 0,
             "prizes": 0,
             "wifi": wifi_signal,
+            "last_seen": time.time(),
             "dailyLogs": {},
             "withdrawalHistory": []
         }
         db["machines"].append(machine)
 
-    # Si ya existe, SOLO actualizamos telemetría, latido y wifi (respetando el nombre y ubicación editados por ti)
     if coins_received > 0:
         monto_clp = coins_received * 100
         machine["box"] = machine.get("box", 0) + monto_clp
@@ -61,10 +114,39 @@ def receive_telemetry():
     if prize_status == "dispense":
         machine["prizes"] = machine.get("prizes", 0) + 1
 
-    if is_active is not None:
-        machine["active"] = bool(is_active)
-
+    machine["active"] = True
     machine["wifi"] = wifi_signal
+    machine["last_seen"] = time.time()
 
     save_data(db)
     return jsonify({"status": "success", "box": machine["box"], "sales": machine["sales"]}), 200
+
+@app.route('/api/sync-fleet', methods=['GET', 'POST'])
+def sync_fleet():
+    if request.method == 'POST':
+        try:
+            data = request.get_json(force=True)
+            if data:
+                save_data(data)
+                return jsonify({"status": "success"}), 200
+        except Exception as e:
+            return jsonify({"error": str(e)}), 400
+        return jsonify({"error": "Datos inválidos"}), 400
+    else:
+        db = load_data()
+        current_time = time.time()
+        
+        # Verificar si alguna máquina superó los 45 segundos sin enviar latidos
+        for m in db.get("machines", []):
+            last_seen = m.get("last_seen", 0)
+            if last_seen > 0 and (current_time - last_seen) > 45:
+                m["active"] = False
+
+        return jsonify(db), 200
+
+@app.route('/api/status', methods=['GET'])
+def get_status():
+    return sync_fleet()
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)
