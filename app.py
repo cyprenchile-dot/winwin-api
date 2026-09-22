@@ -52,11 +52,6 @@ def receive_telemetry():
     if not dev_id:
         return jsonify({"error": "Falta identificador"}), 400
 
-    # 🚫 LISTA NEGRA: Bloqueo definitivo para que la Terminal 6254 no vuelva a crearse jamás
-    BLOCKED_MACS = ["20:50:0D:30:62:54"]
-    if dev_id in BLOCKED_MACS:
-        return jsonify({"status": "ignored", "message": "Terminal bloqueada"}), 200
-
     try:
         coins_received = int(data.get('coins') or data.get('pulse') or 0)
     except:
@@ -79,6 +74,7 @@ def receive_telemetry():
             machine = m
             break
 
+    # 🚀 AUTO-REGISTRO MASIVO INFINITO: Placas nuevas se registran solas al encender
     if not machine:
         machine = {
             "mac": dev_id,
@@ -121,17 +117,11 @@ def sync_fleet():
                 db = load_data()
                 incoming_machines = data.get("machines", [])
                 
-                # 🛡️ PROTECCIÓN CRÍTICA ANTI-BORRADO:
-                # Si el navegador intenta sincronizar 0 máquinas por error al cargar,
-                # el servidor rechaza el guardado vacío para proteger los datos acumulados.
+                # 🛡️ PROTECCIÓN ANTI-BORRADO: Evita sobrescribir con listas vacías por error al cargar
                 if len(incoming_machines) == 0 and len(db.get("machines", [])) > 0:
-                    print("⚠️ Alerta de seguridad: Se intentó vaciar la flota. Cambio ignorado.")
                     return jsonify({"status": "protected", "message": "Protegido contra borrado vacío"}), 200
 
-                # Filtrar preventivamente la MAC bloqueada
-                cleaned_machines = [m for m in incoming_machines if m.get("mac") not in ["20:50:0D:30:62:54"]]
-                
-                db["machines"] = cleaned_machines
+                db["machines"] = incoming_machines
                 if "dailyLedger" in data:
                     db["dailyLedger"] = data["dailyLedger"]
                 
@@ -144,10 +134,7 @@ def sync_fleet():
         db = load_data()
         current_time = time.time()
         
-        if "machines" in db:
-            db["machines"] = [m for m in db["machines"] if m.get("mac") not in ["20:50:0D:30:62:54"]]
-
-        # Evaluar estado online/offline sin borrar las máquinas de la base de datos
+        # Evaluar en tiempo real si cada máquina está ONLINE u OFFLINE (margen de 35s)
         for m in db.get("machines", []):
             last_seen = m.get("last_seen", 0)
             if last_seen > 0 and (current_time - last_seen) <= 35:
