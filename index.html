@@ -1,153 +1,688 @@
-from flask import Flask, request, jsonify, send_file
-from flask_cors import CORS
-import json
-import os
-import time
-
-app = Flask(__name__)
-CORS(app)
-
-DATABASE_FILE = 'fleet_database.json'
-
-DEFAULT_DATABASE = {
-    "dailyLedger": [],
-    "machines": []
-}
-
-def load_data():
-    if os.path.exists(DATABASE_FILE):
-        try:
-            with open(DATABASE_FILE, 'r') as f:
-                data = json.load(f)
-                if isinstance(data, dict) and "machines" in data:
-                    return data
-        except Exception as e:
-            print(f"⚠️ Error leyendo JSON: {e}")
-    
-    save_data(DEFAULT_DATABASE)
-    return DEFAULT_DATABASE
-
-def save_data(data):
-    try:
-        with open(DATABASE_FILE, 'w') as f:
-            json.dump(data, f, indent=4)
-    except Exception as e:
-        print(f"⚠️ Error guardando JSON: {e}")
-
-@app.route('/')
-def serve_index():
-    return send_file('index.html')
-
-@app.route('/api/telemetry', methods=['POST'])
-def receive_telemetry():
-    try:
-        data = request.get_json(force=True)
-    except Exception as e:
-        return jsonify({"error": "JSON inválido"}), 400
-
-    if not data:
-        return jsonify({"error": "JSON vacío"}), 400
-
-    dev_id = data.get('device_id') or data.get('mac')
-    if not dev_id:
-        return jsonify({"error": "Falta identificador"}), 400
-
-    try:
-        coins_received = int(data.get('coins') or data.get('pulse') or 0)
-    except:
-        coins_received = 0
-
-    try:
-        wifi_signal = int(data.get('wifi', -60))
-    except:
-        wifi_signal = -60
-
-    prize_status = str(data.get('prize', ''))
-
-    db = load_data()
-    if "machines" not in db:
-        db["machines"] = []
-
-    machine = None
-    for m in db["machines"]:
-        if m.get("mac") == dev_id or m.get("device_id") == dev_id:
-            machine = m
-            break
-
-    # 🚀 AUTO-REGISTRO MASIVO: Cualquier placa nueva que se conecte se da de alta sola de manera infinita
-    if not machine:
-        machine = {
-            "mac": dev_id,
-            "device_id": dev_id,
-            "name": f"Terminal {dev_id[-5:] if len(dev_id)>=5 else 'Nuevo'}",
-            "location": "Local por definir",
-            "lat": -33.4489,
-            "lng": -70.6693,
-            "active": True,
-            "box": 0,
-            "sales": 0,
-            "prizes": 0,
-            "wifi": wifi_signal,
-            "last_seen": time.time(),
-            "dailyLogs": {},
-            "withdrawalHistory": []
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inversiones WinWin SpA - Telemetría Pro</title>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Leaflet CSS para los Mapas -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        :root {
+            --bg-color: #070a14;
+            --card-bg: #101728;
+            --accent-green: #10b981;
+            --accent-red: #ef4444;
+            --accent-yellow: #f59e0b;
+            --accent-blue: #3b82f6;
+            --accent-purple: #8b5cf6;
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            --border-color: #1e293b;
         }
-        db["machines"].append(machine)
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: var(--bg-color); color: var(--text-main); padding: 12px; }
 
-    if coins_received > 0:
-        monto_clp = coins_received * 100
-        machine["box"] = machine.get("box", 0) + monto_clp
-        machine["sales"] = machine.get("sales", 0) + monto_clp
+        header { display: flex; justify-content: space-between; align-items: center; background: var(--card-bg); padding: 15px; border-radius: 12px; margin-bottom: 15px; border: 1px solid var(--border-color); flex-wrap: wrap; gap: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+        .logo-area h1 { font-size: 1.1rem; letter-spacing: 0.5px; color: #fff; font-weight: 800; }
+        .logo-area span { font-size: 0.7rem; color: var(--accent-blue); letter-spacing: 1.5px; display: block; margin-top: 2px; }
 
-    if prize_status == "dispense":
-        machine["prizes"] = machine.get("prizes", 0) + 1
+        .header-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; width: 100%; }
+        @media(min-width: 768px) { .header-actions { width: auto; } }
 
-    machine["wifi"] = wifi_signal
-    machine["last_seen"] = time.time()
+        .btn { background: var(--accent-green); color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.75rem; transition: 0.2s; flex: 1; text-align: center; }
+        .btn:hover { opacity: 0.9; }
+        .btn-secondary { background: var(--accent-blue); }
+        .btn-purple { background: var(--accent-purple); }
+        .btn-danger { background: var(--accent-red); }
 
-    save_data(db)
-    return jsonify({"status": "success", "box": machine["box"], "sales": machine["sales"]}), 200
+        .status-badge { background: rgba(16, 185, 129, 0.12); color: var(--accent-green); padding: 4px 10px; border-radius: 15px; font-size: 0.75rem; font-weight: bold; border: 1px solid rgba(16, 185, 129, 0.3); margin-left: auto; }
 
-@app.route('/api/sync-fleet', methods=['GET', 'POST'])
-def sync_fleet():
-    if request.method == 'POST':
-        try:
-            data = request.get_json(force=True)
-            if data and isinstance(data, dict):
-                db = load_data()
-                incoming_machines = data.get("machines", [])
-                
-                # 🛡️ PROTECCIÓN ANTI-BORRADO: Evita sobrescribir con listas vacías por error al cargar la web
-                if len(incoming_machines) == 0 and len(db.get("machines", [])) > 0:
-                    return jsonify({"status": "protected", "message": "Protegido contra borrado vacío"}), 200
+        /* CONTADORES DESTACADOS */
+        .metrics-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 15px; }
+        @media(min-width: 768px) { .metrics-grid { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; } }
 
-                db["machines"] = incoming_machines
-                if "dailyLedger" in data:
-                    db["dailyLedger"] = data["dailyLedger"]
-                
-                save_data(db)
-                return jsonify({"status": "success"}), 200
-        except Exception as e:
-            return jsonify({"error": str(e)}), 400
-        return jsonify({"error": "Datos inválidos"}), 400
-    else:
-        db = load_data()
-        current_time = time.time()
-        
-        # Evaluación en tiempo real para determinar si cada máquina está ONLINE u OFFLINE (margen de 35s)
-        for m in db.get("machines", []):
-            last_seen = m.get("last_seen", 0)
-            if last_seen > 0 and (current_time - last_seen) <= 35:
-                m["is_online"] = True
-            else:
-                m["is_online"] = False
+        .card { background: var(--card-bg); padding: 15px; border-radius: 12px; border: 1px solid var(--border-color); position: relative; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+        .card h3 { font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 6px; letter-spacing: 0.5px; }
+        .card .value { font-size: 1.4rem; font-weight: 800; color: #fff; text-shadow: 0 2px 4px rgba(0,0,0,0.3); }
+        .card .subtext { font-size: 0.65rem; color: var(--accent-green); margin-top: 4px; font-weight: 600; }
 
-        return jsonify(db), 200
+        /* SECCIÓN DE MÁQUINAS */
+        .machines-section { margin-bottom: 15px; }
+        .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 10px; }
+        .section-header h2 { font-size: 0.95rem; color: var(--text-main); font-weight: 700; }
+        .search-input { background: var(--card-bg); border: 1px solid var(--border-color); color: #fff; padding: 8px 12px; border-radius: 6px; width: 100%; font-size: 0.85rem; outline: none; }
+        @media(min-width: 768px) { .search-input { width: 260px; } }
 
-@app.route('/api/status', methods=['GET'])
-def get_status():
-    return sync_fleet()
+        .machines-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+        @media(min-width: 768px) { .machines-grid { grid-template-columns: repeat(auto-fill, minmax(440px, 1fr)); gap: 15px; } }
 
-if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port)
+        .machine-box { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 15px; position: relative; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+        .machine-header-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; }
+        .machine-title { font-size: 0.95rem; font-weight: 700; color: #fff; }
+        .machine-mac { font-size: 0.7rem; color: var(--text-muted); font-family: monospace; margin-top: 2px; }
+        .machine-location { font-size: 0.75rem; color: var(--accent-blue); margin-top: 3px; font-weight: 600; }
+
+        .led-indicator { display: flex; align-items: center; gap: 5px; font-size: 0.7rem; font-weight: bold; background: rgba(255,255,255,0.03); padding: 3px 8px; border-radius: 15px; border: 1px solid rgba(255,255,255,0.05); }
+        .led-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+        .led-dot.online { background-color: var(--accent-green); box-shadow: 0 0 8px var(--accent-green); }
+        .led-dot.offline { background-color: var(--accent-red); box-shadow: 0 0 8px var(--accent-red); }
+
+        .machine-stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+        .stat-box { background: rgba(255, 255, 255, 0.015); border: 1px solid rgba(255, 255, 255, 0.03); border-radius: 6px; padding: 8px 10px; }
+        .stat-box span { display: block; font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 2px; font-weight: 600; }
+        .stat-box b { font-size: 0.95rem; color: #fff; font-weight: 700; }
+
+        .machine-footer-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+        .btn-sm { padding: 6px 10px; font-size: 0.7rem; border-radius: 5px; border: none; font-weight: bold; cursor: pointer; flex: 1; text-align: center; }
+        .btn-edit { background: var(--accent-blue); color: white; }
+        .btn-pause { background: #3b82f6; color: white; }
+        .btn-danger { background: #ef4444; color: white; }
+        .btn-report { background: var(--accent-purple); color: white; }
+        .btn-delete { background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); }
+        .btn-delete:hover { background: #ef4444; color: white; }
+
+        /* MAPA GENERAL DE LA FLOTA (UBICADO DEBAJO DE LAS MÁQUINAS) */
+        .fleet-map-card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 15px; display: flex; flex-direction: column; margin-bottom: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+        .fleet-map-card h2 { font-size: 0.95rem; margin-bottom: 10px; color: var(--text-main); font-weight: 700; }
+        #dashboard-map { width: 100%; height: 350px; border-radius: 8px; border: 1px solid var(--border-color); }
+
+        /* ANALYTICS */
+        .analytics-grid { display: grid; grid-template-columns: 1fr; gap: 15px; margin-bottom: 15px; }
+        @media(min-width: 900px) { .analytics-grid { grid-template-columns: 1fr 1fr; } }
+
+        .analytics-card { background: var(--card-bg); padding: 15px; border-radius: 12px; border: 1px solid var(--border-color); box-shadow: 0 4px 10px rgba(0,0,0,0.2); display: flex; flex-direction: column; height: 210px; }
+        .analytics-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .analytics-header h2 { font-size: 0.85rem; color: var(--text-main); font-weight: 600; }
+
+        .calendar-ledger { flex-grow: 1; overflow-y: auto; font-size: 0.75rem; border: 1px solid var(--border-color); border-radius: 6px; background: rgba(0,0,0,0.2); padding: 8px; }
+        .ledger-row { display: flex; justify-content: space-between; padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .ledger-row:last-child { border-bottom: none; }
+
+        /* MODAL DE EDICIÓN CON MAPA */
+        #edit-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 1100; justify-content: center; align-items: center; padding: 15px; }
+        .edit-box { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; width: 100%; max-width: 500px; padding: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); color: #fff; }
+        .edit-box h2 { font-size: 1rem; margin-bottom: 12px; color: var(--text-main); }
+        .edit-group { margin-bottom: 10px; }
+        .edit-group label { display: block; font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px; }
+        .edit-group input { width: 100%; background: #070a14; border: 1px solid var(--border-color); color: #fff; padding: 8px; border-radius: 6px; font-size: 0.85rem; outline: none; }
+        #edit-map { width: 100%; height: 220px; border-radius: 8px; margin-top: 8px; border: 1px solid var(--border-color); }
+        .edit-actions { display: flex; gap: 8px; margin-top: 15px; }
+
+        /* MODAL DE INFORME TAMAÑO CARTA */
+        #print-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 1000; justify-content: center; align-items: center; overflow-y: auto; padding: 10px; }
+        .letter-page { background: #ffffff; color: #000000; width: 100%; max-width: 21.59cm; padding: 1.5cm; margin: auto; border-radius: 4px; box-shadow: 0 0 25px rgba(0,0,0,0.5); position: relative; }
+        .letter-header { text-align: center; border-bottom: 2px solid #222; padding-bottom: 12px; margin-bottom: 15px; }
+        .letter-header h1 { font-size: 1.2rem; color: #111; font-weight: 800; }
+        .letter-header span { font-size: 0.75rem; color: #555; font-weight: 700; display: block; margin-top: 3px; }
+        .letter-table { width: 100%; border-collapse: collapse; margin-top: 10px; margin-bottom: 20px; font-size: 0.8rem; }
+        .letter-table th, .letter-table td { border: 1px solid #ccc; padding: 7px 10px; text-align: left; }
+        .letter-table th { background: #f1f5f9; color: #000; font-weight: 700; }
+        .close-modal-btn { position: absolute; top: 15px; right: 15px; background: #ef4444; color: white; border: none; padding: 6px 12px; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 0.75rem; }
+
+        @media print {
+            body * { visibility: hidden; }
+            #print-modal, #print-modal * { visibility: visible; }
+            #print-modal { position: absolute; top: 0; left: 0; background: white; padding: 0; width: 100%; }
+            .close-modal-btn { display: none; }
+            .letter-page { box-shadow: none; margin: 0; width: 100%; padding: 1cm; }
+        }
+    </style>
+    <!-- Leaflet JS para los Mapas -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</head>
+<body>
+
+    <header>
+        <div class="logo-area">
+            <h1>INVERSIONES WINWIN SPA</h1>
+            <span>TELEMETRÍA Y CONTROL PRO (Piero & Daniel)</span>
+        </div>
+        <div class="status-badge" id="server-status">ONLINE</div>
+        <div class="header-actions" style="margin-top: 8px;">
+            <button class="btn" onclick="registerMachine()">+ Registrar MAC</button>
+            <button class="btn btn-purple" onclick="openGlobalReport()">📄 Informe Mensual / Flota</button>
+            <button class="btn btn-danger" onclick="resetGlobalBox()" style="flex:unset;">Vaciar Caja Global</button>
+        </div>
+    </header>
+
+    <!-- CONTADORES DESTACADOS -->
+    <div class="metrics-grid">
+        <div class="card">
+            <h3>Terminales Activos</h3>
+            <div class="value" id="active-terminals">0</div>
+            <div class="subtext">Flota conectada</div>
+        </div>
+        <div class="card" style="border-left: 3px solid var(--accent-yellow);">
+            <h3>Venta Total Día</h3>
+            <div class="value" id="daily-sales">$0 CLP</div>
+            <div class="subtext">Automático 00:00 hrs</div>
+        </div>
+        <div class="card" style="border-left: 3px solid var(--accent-blue);">
+            <h3>Caja Global (Físico)</h3>
+            <div class="value" id="box-total">$0 CLP</div>
+            <div class="subtext">Acumulado hasta retiro</div>
+        </div>
+        <div class="card" style="border-left: 3px solid var(--accent-purple);">
+            <h3>Premios Totales</h3>
+            <div class="value" id="total-prizes">0 un.</div>
+            <div class="subtext">Dispensador</div>
+        </div>
+        <div class="card">
+            <h3>Señal Wi-Fi Promedio</h3>
+            <div class="value" id="wifi-signal">0 dBm</div>
+            <div class="subtext">Estabilidad</div>
+        </div>
+        <div class="card" style="border-left: 3px solid var(--accent-green);">
+            <h3>Eficiencia Flota</h3>
+            <div class="value" id="fleet-efficiency">0%</div>
+            <div class="subtext">Ratio venta/premio</div>
+        </div>
+    </div>
+
+    <!-- MÁQUINAS EN TERRENO -->
+    <div class="machines-section">
+        <div class="section-header">
+            <h2>MÁQUINAS EN TERRENO</h2>
+            <input type="text" id="searchInput" class="search-input" placeholder="🔍 Buscar nombre o MAC..." onkeyup="filterMachines()">
+        </div>
+        <div class="machines-grid" id="machines-container"></div>
+    </div>
+
+    <!-- MAPA GENERAL DE LA FLOTA (UBICADO DEBAJO DE LAS MÁQUINAS) -->
+    <div class="fleet-map-card">
+        <h2>🌍 Ubicación de Flota en Terreno</h2>
+        <div id="dashboard-map"></div>
+    </div>
+
+    <!-- ANALYTICS -->
+    <div class="analytics-grid">
+        <div class="analytics-card">
+            <div class="analytics-header">
+                <h2>Tendencia de Venta Diaria</h2>
+            </div>
+            <div style="position: relative; flex-grow: 1;">
+                <canvas id="salesChart"></canvas>
+            </div>
+        </div>
+        <div class="analytics-card">
+            <div class="analytics-header">
+                <h2>📅 Bitácora Automática de Registros Diarios</h2>
+            </div>
+            <div class="calendar-ledger" id="ledger-container"></div>
+        </div>
+    </div>
+
+    <!-- MODAL DE EDICIÓN CON MAPA -->
+    <div id="edit-modal">
+        <div class="edit-box">
+            <h2>✏️ Editar Terminal y Ubicación GPS</h2>
+            <input type="hidden" id="edit-index">
+            <div class="edit-group">
+                <label>Nombre de la Terminal:</label>
+                <input type="text" id="edit-name" placeholder="Ej: Peluchera Local Sur">
+            </div>
+            <div class="edit-group">
+                <label>Nombre del Local o Referencia:</label>
+                <input type="text" id="edit-location" placeholder="Ej: Mall Plaza / Local 102">
+            </div>
+            <div class="edit-group">
+                <label>Pin de Ubicación en el Mapa (Haz clic para mover):</label>
+                <div id="edit-map"></div>
+            </div>
+            <div class="edit-actions">
+                <button class="btn btn-secondary" onclick="saveEditedMachine()">Guardar Cambios</button>
+                <button class="btn btn-danger" onclick="closeEditModal()" style="flex:unset;">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DE INFORME TAMAÑO CARTA -->
+    <div id="print-modal">
+        <div class="letter-page">
+            <button class="close-modal-btn" onclick="closeReport()">Cerrar</button>
+            <div class="letter-header">
+                <svg width="55" height="55" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin: 0 auto 6px auto; display: block;">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                    <line x1="3" y1="9" x2="21" y2="9"></line>
+                    <path d="M3 17l4-4 3 3 5-7 4 4"></path>
+                </svg>
+                <h1>INVERSIONES WIN WIN SpA</h1>
+                <span>R.U.T.: 78.498.679-9 | DEPARTAMENTO DE TELEMETRÍA Y FINANZAS</span>
+                <h2 id="report-title" style="margin-top: 10px; font-size: 1rem; color: #222;">REPORTE DE CIERRE Y BITÁCORA DIARIA</h2>
+                <p id="report-date" style="margin-top: 3px; font-size: 0.75rem; color: #555;"></p>
+            </div>
+            <div id="report-content-body"></div>
+            <div style="margin-top: 35px; display: flex; justify-content: space-between; text-align: center; font-size: 0.75rem;">
+                <div style="border-top: 1px solid #333; width: 150px; padding-top: 6px;">Firma Administrador</div>
+                <div style="border-top: 1px solid #333; width: 150px; padding-top: 6px;">Timbre y Sello</div>
+            </div>
+            <div style="text-align: center; margin-top: 20px;">
+                <button class="btn" onclick="window.print()" style="background: #000; color: #fff; padding: 8px 16px; font-size: 0.8rem;">Imprimir / Guardar PDF</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const ctx = document.getElementById('salesChart').getContext('2d');
+        const salesChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Hoy'],
+                datasets: [{
+                    label: 'Ventas CLP ($)',
+                    data: [0, 0, 0, 0, 0, 0, 0],
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.08)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: { grid: { color: '#1a233a' }, ticks: { color: '#9ca3af', font: { size: 9 } } },
+                    x: { grid: { display: false }, ticks: { color: '#9ca3af', font: { size: 9 } } }
+                }
+            }
+        });
+
+        let machines = [];
+        let dailyLedger = [];
+        let fleetMap = null;
+        let fleetMarkers = [];
+        let editMap = null;
+        let editMarker = null;
+        let selectedLat = -33.4489;
+        let selectedLng = -70.6693;
+
+        window.addEventListener('DOMContentLoaded', () => {
+            fleetMap = L.map('dashboard-map').setView([-33.4489, -70.6693], 11);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap contributors'
+            }).addTo(fleetMap);
+        });
+
+        async function saveStateAndSync() {
+            try {
+                await fetch('https://winwin-api-v2.onrender.com/api/sync-fleet', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ machines: machines, dailyLedger: dailyLedger })
+                });
+            } catch (e) {
+                console.log("Error al sincronizar con la nube", e);
+            }
+        }
+
+        async function fetchTelemetry() {
+            try {
+                const response = await fetch('https://winwin-api-v2.onrender.com/api/sync-fleet');
+                if(response.ok) {
+                    const data = await response.json();
+                    if(data && Array.isArray(data.machines)) {
+                        machines = data.machines;
+                        if(data.dailyLedger) dailyLedger = data.dailyLedger;
+                        updateUI();
+                    }
+                    document.getElementById('server-status').innerText = "ONLINE";
+                    document.getElementById('server-status').style.color = "var(--accent-green)";
+                }
+            } catch (error) {
+                document.getElementById('server-status').innerText = "OFFLINE";
+                document.getElementById('server-status').style.color = "#ef4444";
+            }
+        }
+
+        function updateUI() {
+            let totalDaily = 0;
+            let totalBox = 0;
+            let totalPrizes = 0;
+            let onlineCount = 0;
+            let wifiSum = 0;
+
+            machines.forEach(m => {
+                if (m.is_online) onlineCount++;
+                totalDaily += (m.sales || 0);
+                totalBox += (m.box || 0);
+                totalPrizes += (m.prizes || 0);
+                wifiSum += (m.wifi || -50);
+            });
+
+            let avgWifi = machines.length > 0 ? Math.round(wifiSum / machines.length) : 0;
+            let efficiency = totalPrizes > 0 ? Math.min(100, Math.round((totalPrizes * 500 / (totalDaily || 1)) * 100)) : 0;
+
+            document.getElementById('daily-sales').innerText = `$${totalDaily.toLocaleString()} CLP`;
+            document.getElementById('box-total').innerText = `$${totalBox.toLocaleString()} CLP`;
+            document.getElementById('total-prizes').innerText = `${totalPrizes} un.`;
+            document.getElementById('active-terminals').innerText = onlineCount;
+            document.getElementById('wifi-signal').innerText = `${avgWifi} dBm`;
+            document.getElementById('fleet-efficiency').innerText = `${efficiency}%`;
+
+            salesChart.data.datasets[0].data[6] = totalDaily;
+            salesChart.update();
+
+            renderMachineBoxes(machines);
+            renderLedger();
+            updateFleetMapMarkers(machines);
+        }
+
+        function updateFleetMapMarkers(listToRender) {
+            if (!fleetMap) return;
+            fleetMarkers.forEach(marker => fleetMap.removeLayer(marker));
+            fleetMarkers = [];
+
+            listToRender.forEach(m => {
+                let lat = m.lat || -33.4489;
+                let lng = m.lng || -70.6693;
+                let pinColor = m.is_online ? '#10b981' : '#ef4444'; // Verde si online, Rojo si offline
+                let statusText = m.is_online ? 'ONLINE' : 'OFFLINE';
+
+                let marker = L.circleMarker([lat, lng], {
+                    radius: 10,
+                    fillColor: pinColor,
+                    color: '#ffffff',
+                    weight: 2,
+                    opacity: 1,
+                    fillOpacity: 0.9
+                }).addTo(fleetMap);
+
+                marker.bindPopup(`<b>${m.name}</b><br>📍 ${m.location || 'Sin local'}<br>Estado: <b>${statusText}</b><br>💰 Caja: $${(m.box||0).toLocaleString()} CLP`);
+                fleetMarkers.push(marker);
+            });
+        }
+
+        function renderLedger() {
+            const container = document.getElementById('ledger-container');
+            container.innerHTML = '';
+            if(dailyLedger.length === 0) {
+                container.innerHTML = `<div style="color: var(--text-muted); text-align:center; padding: 20px;">Sin registros automáticos aún.</div>`;
+                return;
+            }
+            dailyLedger.forEach(item => {
+                let row = document.createElement('div');
+                row.className = 'ledger-row';
+                row.innerHTML = `<span>📅 ${item.date}</span> <b>$${item.total.toLocaleString()} CLP</b> <span style="color:var(--text-muted)">(${item.prizes} premios)</span>`;
+                container.appendChild(row);
+            });
+        }
+
+        function renderMachineBoxes(listToRender) {
+            const container = document.getElementById('machines-container');
+            container.innerHTML = '';
+            if(listToRender.length === 0) {
+                container.innerHTML = `<p style="color: var(--text-muted); grid-column: 1/-1; font-size: 0.85rem; text-align: center; padding: 20px;">No hay máquinas registradas. Haz clic en "+ Registrar MAC" para dar de alta tu primer terminal.</p>`;
+                return;
+            }
+            listToRender.forEach((m) => {
+                const index = machines.findIndex(item => item.mac === m.mac);
+                const boxDiv = document.createElement('div');
+                boxDiv.className = `machine-box`;
+
+                let connClass = m.is_online ? 'online' : 'offline';
+                let connText = m.is_online ? 'ONLINE' : 'OFFLINE';
+
+                boxDiv.innerHTML = `
+                    <div class="machine-header-row">
+                        <div>
+                            <div class="machine-title">${m.name}</div>
+                            <div class="machine-mac">${m.mac}</div>
+                            <div class="machine-location">📍 ${m.location || 'Local por definir'}</div>
+                        </div>
+                        <div class="led-indicator">
+                            <span class="led-dot ${connClass}"></span>
+                            <span style="color: ${m.is_online ? 'var(--accent-green)' : 'var(--accent-red)'};">${connText}</span>
+                        </div>
+                    </div>
+                    <div class="machine-stats-grid">
+                        <div class="stat-box"><span>CAJA FÍSICA (BOX)</span><b>$${m.box.toLocaleString()} CLP</b></div>
+                        <div class="stat-box"><span>PREMIOS</span><b>${m.prizes || 0} un.</b></div>
+                        <div class="stat-box"><span>SEÑAL WI-FI</span><b>${m.wifi} dBm</b></div>
+                        <div class="stat-box"><span>VENTA DÍA (AUTO)</span><b>$${m.sales.toLocaleString()} CLP</b></div>
+                    </div>
+                    <div class="machine-footer-actions">
+                        <button class="btn-sm btn-edit" onclick="openEditModal(${index})">✏️ Editar</button>
+                        <button class="btn-sm btn-pause" onclick="toggleMachine(${index})">${m.active ? 'Pausar' : 'Activar'}</button>
+                        <button class="btn-sm btn-danger" onclick="resetMachineBox(${index})">Vaciar Box (Retiro)</button>
+                        <button class="btn-sm btn-report" onclick="openMachineReport(${index})">📄 Informe</button>
+                        <button class="btn-sm btn-delete" onclick="deleteMachine(${index})">🗑️ Eliminar</button>
+                    </div>
+                `;
+                container.appendChild(boxDiv);
+            });
+        }
+
+        function filterMachines() {
+            let query = document.getElementById('searchInput').value.toLowerCase();
+            let filtered = machines.filter(m => m.name.toLowerCase().includes(query) || m.mac.toLowerCase().includes(query));
+            renderMachineBoxes(filtered);
+        }
+
+        function openEditModal(index) {
+            let m = machines[index];
+            document.getElementById('edit-index').value = index;
+            document.getElementById('edit-name').value = m.name || '';
+            document.getElementById('edit-location').value = m.location || '';
+
+            selectedLat = m.lat || -33.4489;
+            selectedLng = m.lng || -70.6693;
+
+            document.getElementById('edit-modal').style.display = 'flex';
+
+            setTimeout(() => {
+                if (!editMap) {
+                    editMap = L.map('edit-map').setView([selectedLat, selectedLng], 13);
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        attribution: '&copy; OpenStreetMap contributors'
+                    }).addTo(editMap);
+
+                    editMarker = L.marker([selectedLat, selectedLng], { draggable: true }).addTo(editMap);
+
+                    editMarker.on('dragend', function (e) {
+                        let pos = editMarker.getLatLng();
+                        selectedLat = pos.lat;
+                        selectedLng = pos.lng;
+                    });
+
+                    editMap.on('click', function (e) {
+                        selectedLat = e.latlng.lat;
+                        selectedLng = e.latlng.lng;
+                        editMarker.setLatLng([selectedLat, selectedLng]);
+                    });
+                } else {
+                    editMap.invalidateSize();
+                    editMap.setView([selectedLat, selectedLng], 13);
+                    editMarker.setLatLng([selectedLat, selectedLng]);
+                }
+            }, 300);
+        }
+
+        function closeEditModal() {
+            document.getElementById('edit-modal').style.display = 'none';
+        }
+
+        async function saveEditedMachine() {
+            let index = document.getElementById('edit-index').value;
+            let m = machines[index];
+
+            m.name = document.getElementById('edit-name').value || 'Terminal Terreno';
+            m.location = document.getElementById('edit-location').value || 'Local por definir';
+            m.lat = selectedLat;
+            m.lng = selectedLng;
+
+            await saveStateAndSync();
+            updateUI();
+            closeEditModal();
+            alert("¡Información, ubicación y pin del mapa guardados con éxito!");
+        }
+
+        async function resetGlobalBox() {
+            let operador = prompt("Arqueo global. Ingresa quién realiza el retiro (ej: Piero o Daniel):", "Daniel");
+            if (!operador) return;
+            let observacion = prompt("Ingresa alguna observación general del retiro global:", "Retiro general de flota");
+
+            if(confirm("¿Realizar el arqueo y vaciar la caja global de efectivo de toda la flota?")) {
+                let fechaHora = new Date().toLocaleString();
+                machines.forEach(m => {
+                    if (m.box > 0) {
+                        if (!m.withdrawalHistory) m.withdrawalHistory = [];
+                        m.withdrawalHistory.unshift({
+                            date: fechaHora,
+                            operator: operador,
+                            amount: m.box,
+                            note: observacion + " (Global)"
+                        });
+                        m.box = 0;
+                    }
+                });
+                await saveStateAndSync();
+                updateUI();
+                alert(`¡Retiro global registrado con éxito por ${operador}!`);
+            }
+        }
+
+        async function resetMachineBox(index) {
+            let m = machines[index];
+            let operador = prompt(`Retiro para "${m.name}". Ingresa quién realiza el retiro (Piero o Daniel):`, "Daniel");
+            if (!operador) return; 
+
+            let observacion = prompt("Ingresa alguna observación o novedad de la máquina (opcional):", "Sin novedad");
+            let montoRetirado = m.box;
+            let premiosRetirados = m.prizes || 0;
+
+            if (!m.withdrawalHistory) m.withdrawalHistory = [];
+
+            m.withdrawalHistory.unshift({
+                date: new Date().toLocaleString(),
+                operator: operador,
+                amount: montoRetirado,
+                prizesCount: premiosRetirados,
+                note: observacion || "Sin observaciones"
+            });
+
+            m.box = 0; 
+            m.prizes = 0; 
+            await saveStateAndSync();
+            updateUI();
+
+            alert(`✅ Retiro registrado por ${operador}\nMonto: $${montoRetirado.toLocaleString()} CLP\nPremios reiniciados a 0.`);
+        }
+
+        async function toggleMachine(index) {
+            machines[index].active = !machines[index].active;
+            await saveStateAndSync();
+            updateUI();
+        }
+
+        async function deleteMachine(index) {
+            if(confirm(`¿Estás seguro de eliminar permanentemente la máquina "${machines[index].name}"?`)) {
+                machines.splice(index, 1);
+                await saveStateAndSync();
+                updateUI();
+            }
+        }
+
+        async function registerMachine() {
+            let macInput = prompt("Ingresa la MAC del ESP32 (ej: 24:6F:28:...):");
+            if(macInput) {
+                let nameInput = prompt("Nombre o ubicación (ej: Peluchera Local 1):");
+                let locInput = prompt("Ubicación del local (ej: Mall Plaza):", "Local Principal");
+                machines.push({ 
+                    mac: macInput, 
+                    name: nameInput || 'Terminal Terreno', 
+                    location: locInput || 'Local Principal',
+                    lat: -33.4489,
+                    lng: -70.6693,
+                    sales: 0, box: 0, prizes: 0, wifi: -50, active: true, dailyLogs: {}, withdrawalHistory: [] 
+                });
+                await saveStateAndSync();
+                updateUI();
+                alert("¡Máquina registrada con éxito!");
+            }
+        }
+
+        function openMachineReport(index) {
+            const m = machines[index];
+            document.getElementById('report-title').innerText = `INFORME DETALLADO - ${m.name.toUpperCase()}`;
+            document.getElementById('report-date').innerText = `Emisión: ${new Date().toLocaleString()}`;
+
+            let logsHtml = '';
+            if(m.dailyLogs && Object.keys(m.dailyLogs).length > 0) {
+                for(let date in m.dailyLogs) {
+                    logsHtml += `<tr><td>${date}</td><td>$${m.dailyLogs[date].sales.toLocaleString()} CLP</td><td>${m.dailyLogs[date].prizes} un.</td></tr>`;
+                }
+            } else {
+                logsHtml = `<tr><td colspan="3" style="text-align:center;">Registros diarios acumulándose automáticamente.</td></tr>`;
+            }
+
+            let withdrawalsHtml = '';
+            if(m.withdrawalHistory && m.withdrawalHistory.length > 0) {
+                m.withdrawalHistory.forEach(w => {
+                    withdrawalsHtml += `<tr><td>${w.date}</td><td><b>${w.operator}</b></td><td>$${w.amount.toLocaleString()} CLP</td><td>${w.note}</td></tr>`;
+                });
+            } else {
+                withdrawalsHtml = `<tr><td colspan="4" style="text-align:center;">No hay retiros registrados en efectivo aún.</td></tr>`;
+            }
+
+            document.getElementById('report-content-body').innerHTML = `
+                <div style="margin-bottom: 12px; font-size: 0.8rem; line-height: 1.4;">
+                    <p><b>MAC:</b> <code>${m.mac}</code></p>
+                    <p><b>Ubicación:</b> ${m.location || 'Local por definir'}</p>
+                    <p><b>Coordenadas GPS:</b> ${m.lat ? m.lat.toFixed(4) + ', ' + m.lng.toFixed(4) : 'No registradas'}</p>
+                    <p><b>Estado Actual de Caja (Box):</b> $${m.box.toLocaleString()} CLP</p>
+                </div>
+                <p><b>💵 Historial de Retiros de Efectivo (Auditoría):</b></p>
+                <table class="letter-table" style="margin-top:5px; margin-bottom:15px;">
+                    <thead><tr><th>Fecha y Hora</th><th>Responsable</th><th>Monto Retirado</th><th>Observación</th></tr></thead>
+                    <tbody>${withdrawalsHtml}</tbody>
+                </table>
+                <p><b>📅 Historial de Rendimiento Diario:</b></p>
+                <table class="letter-table" style="margin-top:5px;">
+                    <thead><tr><th>Fecha</th><th>Venta Diaria</th><th>Premios</th></tr></thead>
+                    <tbody>${logsHtml}</tbody>
+                </table>
+            `;
+            document.getElementById('print-modal').style.display = 'flex';
+        }
+
+        function openGlobalReport() {
+            document.getElementById('report-title').innerText = `INFORME MENSUAL OFICIAL - FLOTA WINWIN`;
+            document.getElementById('report-date').innerText = `Emisión: ${new Date().toLocaleString()}`;
+
+            let totalBox = machines.reduce((a,b)=>a+b.box,0);
+            let totalPrizes = machines.reduce((a,b)=>a+(b.prizes||0),0);
+
+            let tableRows = '';
+            if(machines.length === 0) {
+                tableRows = `<tr><td colspan="5" style="text-align:center;">No hay terminales activos en la flota.</td></tr>`;
+            } else {
+                machines.forEach(m => {
+                    tableRows += `<tr><td><b>${m.name}</b><br><code style="font-size:0.65rem">${m.mac}</code></td><td>$${m.box.toLocaleString()}</td><td>$${m.sales.toLocaleString()}</td><td>${m.prizes || 0}</td><td>${m.active ? 'Activa' : 'Pausada'}</td></tr>`;
+                });
+            }
+
+            document.getElementById('report-content-body').innerHTML = `
+                <div style="margin-bottom: 12px; font-size: 0.8rem; line-height: 1.4;">
+                    <p><b>Total Terminales:</b> ${machines.length}</p>
+                    <p><b>Caja Global Acumulada (Efectivo Actual):</b> $${totalBox.toLocaleString()} CLP</p>
+                    <p><b>Premios Totales Flota:</b> ${totalPrizes} un.</p>
+                </div>
+                <table class="letter-table">
+                    <thead><tr><th>Máquina (MAC)</th><th>Caja Física Actual</th><th>Venta Hoy</th><th>Premios</th><th>Estado</th></tr></thead>
+                    <tbody>${tableRows}</tbody>
+                </table>
+            `;
+            document.getElementById('print-modal').style.display = 'flex';
+        }
+
+        function closeReport() { document.getElementById('print-modal').style.display = 'none'; }
+
+        fetchTelemetry();
+        setInterval(fetchTelemetry, 3000);
+    </script>
+</body>
+</html>
