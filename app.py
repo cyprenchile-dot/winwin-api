@@ -118,10 +118,24 @@ def sync_fleet():
         try:
             data = request.get_json(force=True)
             if data and isinstance(data, dict):
-                # Limpiar cualquier intento de sincronizar la MAC bloqueada
-                if "machines" in data:
-                    data["machines"] = [m for m in data["machines"] if m.get("mac") not in ["20:50:0D:30:62:54"]]
-                save_data(data)
+                db = load_data()
+                incoming_machines = data.get("machines", [])
+                
+                # 🛡️ PROTECCIÓN CRÍTICA ANTI-BORRADO:
+                # Si el navegador intenta sincronizar 0 máquinas por error al cargar,
+                # el servidor rechaza el guardado vacío para proteger los datos acumulados.
+                if len(incoming_machines) == 0 and len(db.get("machines", [])) > 0:
+                    print("⚠️ Alerta de seguridad: Se intentó vaciar la flota. Cambio ignorado.")
+                    return jsonify({"status": "protected", "message": "Protegido contra borrado vacío"}), 200
+
+                # Filtrar preventivamente la MAC bloqueada
+                cleaned_machines = [m for m in incoming_machines if m.get("mac") not in ["20:50:0D:30:62:54"]]
+                
+                db["machines"] = cleaned_machines
+                if "dailyLedger" in data:
+                    db["dailyLedger"] = data["dailyLedger"]
+                
+                save_data(db)
                 return jsonify({"status": "success"}), 200
         except Exception as e:
             return jsonify({"error": str(e)}), 400
@@ -130,11 +144,10 @@ def sync_fleet():
         db = load_data()
         current_time = time.time()
         
-        # Filtrar preventivamente la MAC bloqueada de la lista devuelta
         if "machines" in db:
             db["machines"] = [m for m in db["machines"] if m.get("mac") not in ["20:50:0D:30:62:54"]]
 
-        # Cálculo preciso de estado online/offline (menos de 35 segundos desde último latido)
+        # Evaluar estado online/offline sin borrar las máquinas de la base de datos
         for m in db.get("machines", []):
             last_seen = m.get("last_seen", 0)
             if last_seen > 0 and (current_time - last_seen) <= 35:
