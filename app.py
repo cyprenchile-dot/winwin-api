@@ -1,63 +1,8 @@
-from flask import Flask, request, jsonify, send_file
-from flask_cors import CORS
-import json
-import os
-
-app = Flask(__name__)
-CORS(app)
-
-DATABASE_FILE = 'fleet_database.json'
-
-# Máquina por defecto blindada: NUNCA se perderá aunque Render reinicie el servidor
-DEFAULT_DATABASE = {
-    "dailyLedger": [],
-    "machines": [
-        {
-            "mac": "24:6F:28:FF:10:01",
-            "device_id": "24:6F:28:FF:10:01",
-            "name": "Terminal 10:01",
-            "active": True,
-            "box": 0,
-            "sales": 0,
-            "prizes": 0,
-            "wifi": -25,
-            "dailyLogs": {},
-            "withdrawalHistory": []
-        }
-    ]
-}
-
-def load_data():
-    if os.path.exists(DATABASE_FILE):
-        try:
-            with open(DATABASE_FILE, 'r') as f:
-                data = json.load(f)
-                if isinstance(data, dict) and "machines" in data and len(data["machines"]) > 0:
-                    return data
-        except Exception as e:
-            print(f"⚠️ Error leyendo JSON: {e}")
-    
-    # Si el archivo no existe o está vacío, restauramos con la máquina por defecto
-    save_data(DEFAULT_DATABASE)
-    return DEFAULT_DATABASE
-
-def save_data(data):
-    try:
-        with open(DATABASE_FILE, 'w') as f:
-            json.dump(data, f, indent=4)
-    except Exception as e:
-        print(f"⚠️ Error guardando JSON: {e}")
-
-@app.route('/')
-def serve_index():
-    return send_file('index.html')
-
 @app.route('/api/telemetry', methods=['POST'])
 def receive_telemetry():
     try:
         data = request.get_json(force=True)
     except Exception as e:
-        print(f"❌ Error al parsear JSON: {e}")
         return jsonify({"error": "JSON inválido"}), 400
 
     if not data:
@@ -90,12 +35,13 @@ def receive_telemetry():
             machine = m
             break
 
+    # Si la MAC no existe, se crea por única vez con un nombre base
     if not machine:
-        # Corrección aplicada: se usa sintaxis válida de Python [-5:] en lugar de .substring(-5)
         machine = {
             "mac": dev_id,
             "device_id": dev_id,
             "name": f"Terminal {dev_id[-5:] if len(dev_id)>=5 else 'Nuevo'}",
+            "location": "Local por definir",
             "active": True,
             "box": 0,
             "sales": 0,
@@ -106,11 +52,11 @@ def receive_telemetry():
         }
         db["machines"].append(machine)
 
+    # Si ya existe, SOLO actualizamos telemetría, latido y wifi (respetando el nombre y ubicación editados por ti)
     if coins_received > 0:
         monto_clp = coins_received * 100
         machine["box"] = machine.get("box", 0) + monto_clp
         machine["sales"] = machine.get("sales", 0) + monto_clp
-        print(f"💰 Sumados +{monto_clp} CLP. Total caja: {machine['box']}")
 
     if prize_status == "dispense":
         machine["prizes"] = machine.get("prizes", 0) + 1
@@ -122,25 +68,3 @@ def receive_telemetry():
 
     save_data(db)
     return jsonify({"status": "success", "box": machine["box"], "sales": machine["sales"]}), 200
-
-@app.route('/api/sync-fleet', methods=['GET', 'POST'])
-def sync_fleet():
-    if request.method == 'POST':
-        try:
-            data = request.get_json(force=True)
-            if data:
-                save_data(data)
-                return jsonify({"status": "success"}), 200
-        except Exception as e:
-            return jsonify({"error": str(e)}), 400
-        return jsonify({"error": "Datos inválidos"}), 400
-    else:
-        db = load_data()
-        return jsonify(db), 200
-
-@app.route('/api/status', methods=['GET'])
-def get_status():
-    return sync_fleet()
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
