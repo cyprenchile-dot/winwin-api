@@ -346,7 +346,6 @@
             let wifiSum = 0;
 
             machines.forEach(m => {
-                // m.is_online ya viene calculado directamente desde el servidor Flask
                 if (m.is_online) onlineCount++;
                 totalDaily += (m.sales || 0);
                 totalBox += (m.box || 0);
@@ -383,7 +382,6 @@
                 let pinColor = m.is_online ? '#10b981' : '#ef4444'; // Verde si online, Rojo si offline
                 let statusText = m.is_online ? 'ONLINE' : 'OFFLINE';
 
-                // Usar un marcador circular con el color exacto según estado
                 let marker = L.circleMarker([lat, lng], {
                     radius: 10,
                     fillColor: pinColor,
