@@ -136,7 +136,6 @@ def sync_fleet():
         db = load_data()
         current_time = time.time()
         
-        # Verificar si alguna máquina superó los 45 segundos sin enviar latidos
         for m in db.get("machines", []):
             last_seen = m.get("last_seen", 0)
             if last_seen > 0 and (current_time - last_seen) > 45:
@@ -148,5 +147,38 @@ def sync_fleet():
 def get_status():
     return sync_fleet()
 
+# ==========================================
+# NUEVO ENDPOINT: EDITAR NOMBRE Y UBICACIÓN
+# ==========================================
+@app.route('/api/update-info', methods=['POST'])
+def update_info():
+    try:
+        data = request.get_json(force=True)
+        dev_id = data.get('device_id') or data.get('mac')
+        new_name = data.get('name')
+        new_location = data.get('location')
+        
+        if not dev_id:
+            return jsonify({"error": "Falta identificador"}), 400
+        
+        db = load_data()
+        updated = False
+        for m in db.get("machines", []):
+            if m.get("mac") == dev_id or m.get("device_id") == dev_id:
+                if new_name is not None:
+                    m["name"] = new_name
+                if new_location is not None:
+                    m["location"] = new_location
+                updated = True
+                break
+                
+        if updated:
+            save_data(db)
+            return jsonify({"status": "success", "message": "Información actualizada correctamente"}), 200
+        return jsonify({"error": "Máquina no encontrada"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
