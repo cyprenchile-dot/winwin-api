@@ -11,22 +11,7 @@ DATABASE_FILE = 'fleet_database.json'
 
 DEFAULT_DATABASE = {
     "dailyLedger": [],
-    "machines": [
-        {
-            "mac": "24:6F:28:FF:10:01",
-            "device_id": "24:6F:28:FF:10:01",
-            "name": "Terminal 10:01",
-            "location": "Local Principal",
-            "active": True,
-            "box": 0,
-            "sales": 0,
-            "prizes": 0,
-            "wifi": -25,
-            "last_seen": time.time(),
-            "dailyLogs": {},
-            "withdrawalHistory": []
-        }
-    ]
+    "machines": []
 }
 
 def load_data():
@@ -34,7 +19,7 @@ def load_data():
         try:
             with open(DATABASE_FILE, 'r') as f:
                 data = json.load(f)
-                if isinstance(data, dict) and "machines" in data and len(data["machines"]) > 0:
+                if isinstance(data, dict) and "machines" in data:
                     return data
         except Exception as e:
             print(f"⚠️ Error leyendo JSON: {e}")
@@ -95,6 +80,8 @@ def receive_telemetry():
             "device_id": dev_id,
             "name": f"Terminal {dev_id[-5:] if len(dev_id)>=5 else 'Nuevo'}",
             "location": "Local por definir",
+            "lat": -33.4489,
+            "lng": -70.6693,
             "active": True,
             "box": 0,
             "sales": 0,
@@ -114,7 +101,6 @@ def receive_telemetry():
     if prize_status == "dispense":
         machine["prizes"] = machine.get("prizes", 0) + 1
 
-    machine["active"] = True
     machine["wifi"] = wifi_signal
     machine["last_seen"] = time.time()
 
@@ -126,7 +112,7 @@ def sync_fleet():
     if request.method == 'POST':
         try:
             data = request.get_json(force=True)
-            if data:
+            if data and isinstance(data, dict):
                 save_data(data)
                 return jsonify({"status": "success"}), 200
         except Exception as e:
@@ -136,48 +122,19 @@ def sync_fleet():
         db = load_data()
         current_time = time.time()
         
+        # El servidor calcula de forma exacta si está online (menos de 35 segundos desde último latido)
         for m in db.get("machines", []):
             last_seen = m.get("last_seen", 0)
-            if last_seen > 0 and (current_time - last_seen) > 45:
-                m["active"] = False
+            if last_seen > 0 and (current_time - last_seen) <= 35:
+                m["is_online"] = True
+            else:
+                m["is_online"] = False
 
         return jsonify(db), 200
 
 @app.route('/api/status', methods=['GET'])
 def get_status():
     return sync_fleet()
-
-# ==========================================
-# NUEVO ENDPOINT: EDITAR NOMBRE Y UBICACIÓN
-# ==========================================
-@app.route('/api/update-info', methods=['POST'])
-def update_info():
-    try:
-        data = request.get_json(force=True)
-        dev_id = data.get('device_id') or data.get('mac')
-        new_name = data.get('name')
-        new_location = data.get('location')
-        
-        if not dev_id:
-            return jsonify({"error": "Falta identificador"}), 400
-        
-        db = load_data()
-        updated = False
-        for m in db.get("machines", []):
-            if m.get("mac") == dev_id or m.get("device_id") == dev_id:
-                if new_name is not None:
-                    m["name"] = new_name
-                if new_location is not None:
-                    m["location"] = new_location
-                updated = True
-                break
-                
-        if updated:
-            save_data(db)
-            return jsonify({"status": "success", "message": "Información actualizada correctamente"}), 200
-        return jsonify({"error": "Máquina no encontrada"}), 404
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
