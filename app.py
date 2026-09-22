@@ -52,6 +52,11 @@ def receive_telemetry():
     if not dev_id:
         return jsonify({"error": "Falta identificador"}), 400
 
+    # 🚫 LISTA NEGRA: Bloqueo definitivo para que la Terminal 6254 no vuelva a crearse jamás
+    BLOCKED_MACS = ["20:50:0D:30:62:54"]
+    if dev_id in BLOCKED_MACS:
+        return jsonify({"status": "ignored", "message": "Terminal bloqueada"}), 200
+
     try:
         coins_received = int(data.get('coins') or data.get('pulse') or 0)
     except:
@@ -113,6 +118,9 @@ def sync_fleet():
         try:
             data = request.get_json(force=True)
             if data and isinstance(data, dict):
+                # Limpiar cualquier intento de sincronizar la MAC bloqueada
+                if "machines" in data:
+                    data["machines"] = [m for m in data["machines"] if m.get("mac") not in ["20:50:0D:30:62:54"]]
                 save_data(data)
                 return jsonify({"status": "success"}), 200
         except Exception as e:
@@ -122,7 +130,11 @@ def sync_fleet():
         db = load_data()
         current_time = time.time()
         
-        # El servidor calcula de forma exacta si está online (menos de 35 segundos desde último latido)
+        # Filtrar preventivamente la MAC bloqueada de la lista devuelta
+        if "machines" in db:
+            db["machines"] = [m for m in db["machines"] if m.get("mac") not in ["20:50:0D:30:62:54"]]
+
+        # Cálculo preciso de estado online/offline (menos de 35 segundos desde último latido)
         for m in db.get("machines", []):
             last_seen = m.get("last_seen", 0)
             if last_seen > 0 and (current_time - last_seen) <= 35:
