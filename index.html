@@ -60,8 +60,9 @@
 
         .machine-box { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 15px; position: relative; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
         .machine-header-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; }
-        .machine-title { font-size: 0.95rem; font-weight: 700; color: #fff; }
+        .machine-title { font-size: 0.95rem; font-weight: 700; color: #fff; outline: none; border-bottom: 1px dashed rgba(255,255,255,0.2); }
         .machine-mac { font-size: 0.7rem; color: var(--text-muted); font-family: monospace; margin-top: 2px; }
+        .machine-location { font-size: 0.7rem; color: var(--accent-blue); margin-top: 2px; outline: none; border-bottom: 1px dashed rgba(59,130,246,0.3); display: inline-block; }
 
         .led-indicator { display: flex; align-items: center; gap: 5px; font-size: 0.7rem; font-weight: bold; background: rgba(255,255,255,0.03); padding: 3px 8px; border-radius: 15px; border: 1px solid rgba(255,255,255,0.05); }
         .led-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
@@ -228,7 +229,6 @@
         <div class="letter-page">
             <button class="close-modal-btn" onclick="closeReport()">Cerrar</button>
             <div class="letter-header">
-                <!-- Logotipo vectorial oficial de Inversiones Win Win SpA -->
                 <svg width="55" height="55" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin: 0 auto 6px auto; display: block;">
                     <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
                     <line x1="3" y1="9" x2="21" y2="9"></line>
@@ -253,7 +253,7 @@
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        const COSTO_PREMIO = 1250; // Constante contable por unidad de muñeco/premio
+        const COSTO_PREMIO = 1250;
 
         let audioCtx = null;
         document.addEventListener('click', () => {
@@ -264,7 +264,6 @@
             }
         }, { once: true });
 
-        // Inicialización del Mapa General de Chile
         const chileMap = L.map('chileMap').setView([-33.4489, -70.6693], 6); 
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 18,
@@ -300,7 +299,7 @@
                 let utilidadM = (m.sales || 0) - costoPremiosM;
 
                 let marker = L.marker([lat, lng], {icon: customIcon}).addTo(chileMap);
-                marker.bindPopup(`<b>${m.name}</b><br>Venta: $${(m.sales||0).toLocaleString()} CLP<br>Utilidad: $${utilidadM.toLocaleString()} CLP<br>Estado: ${m.active ? 'Activa' : 'Pausada'}`);
+                marker.bindPopup(`<b>${m.name}</b><br>Ubicación: ${m.location || 'N/A'}<br>Venta: $${(m.sales||0).toLocaleString()} CLP<br>Utilidad: $${utilidadM.toLocaleString()} CLP<br>Estado: ${m.active ? 'Activa' : 'Pausada'}`);
                 fleetMarkers.push(marker);
             });
         }
@@ -421,8 +420,9 @@
                 boxDiv.innerHTML = `
                     <div class="machine-header-row">
                         <div>
-                            <div class="machine-title">${m.name}</div>
+                            <div class="machine-title" contenteditable="true" onblur="updateMachineName(${index}, this.innerText)" title="Haz clic para editar el nombre">${m.name}</div>
                             <div class="machine-mac">${m.mac}</div>
+                            <div class="machine-location" contenteditable="true" onblur="updateMachineLocation(${index}, this.innerText)" title="Haz clic para editar la ubicación">📍 ${m.location || 'Definir ubicación'}</div>
                         </div>
                         <div class="led-indicator">
                             <span class="led-dot ${m.active ? 'active' : 'inactive'}"></span>
@@ -447,9 +447,24 @@
             });
         }
 
+        async function updateMachineName(index, newName) {
+            if(machines[index].name !== newName) {
+                machines[index].name = newName;
+                await saveStateAndSync();
+            }
+        }
+
+        async function updateMachineLocation(index, newLocation) {
+            let cleanLoc = newLocation.replace('📍 ', '');
+            if(machines[index].location !== cleanLoc) {
+                machines[index].location = cleanLoc;
+                await saveStateAndSync();
+            }
+        }
+
         function filterMachines() {
             let query = document.getElementById('searchInput').value.toLowerCase();
-            let filtered = machines.filter(m => m.name.toLowerCase().includes(query) || m.mac.toLowerCase().includes(query));
+            let filtered = machines.filter(m => m.name.toLowerCase().includes(query) || m.mac.toLowerCase().includes(query) || (m.location && m.location.toLowerCase().includes(query)));
             renderMachineBoxes(filtered);
         }
 
@@ -520,9 +535,9 @@
         }
 
         function startRegisterMachine() {
-            tempMac = prompt("Ingresa la MAC del ESP32 (ej: 24:6F:28:...):");
+            tempMac = prompt("Ingresa la MAC del ESP32 (ej: 20:50:0D:...):");
             if(!tempMac) return;
-            tempName = prompt("Nombre o ubicación (ej: Peluchera Local Colina):");
+            tempName = prompt("Nombre o comercial de la máquina (ej: Peluchera Local Colina):");
             if(!tempName) tempName = 'Terminal Terreno';
 
             document.getElementById('map-modal').style.display = 'flex';
@@ -549,7 +564,9 @@
         async function confirmMachineLocation() {
             machines.push({ 
                 mac: tempMac, 
+                device_id: tempMac,
                 name: tempName, 
+                location: "Ubicación seleccionada en mapa",
                 sales: 0, 
                 box: 0, 
                 prizes: 0, 
@@ -566,7 +583,6 @@
             alert("¡Máquina registrada y ubicada con éxito en el mapa!");
         }
 
-        // 1. INFORME GERENCIAL / PROPIETARIOS (Con logotipo oficial, costos, utilidad y auditoría)
         function openOwnerReport(index) {
             const m = machines[index];
             document.getElementById('report-title').innerText = `INFORME GERENCIAL - ${m.name.toUpperCase()}`;
@@ -602,6 +618,7 @@
             document.getElementById('report-content-body').innerHTML = `
                 <div style="margin-bottom: 15px; font-size: 0.85rem; line-height: 1.5; border: 1px solid #cbd5e1; padding: 10px; border-radius: 6px; background: #f8fafc;">
                     <p><b>MAC:</b> <code>${m.mac}</code></p>
+                    <p><b>Ubicación:</b> ${m.location || 'N/A'}</p>
                     <p><b>Venta Bruta Acumulada:</b> $${totalVenta.toLocaleString()} CLP</p>
                     <p><b>Costo Total Premios (${totalPremiosEntregados} un. x $1.250):</b> -$${costoTotalPremios.toLocaleString()} CLP</p>
                     <p><b>Utilidad Bruta Estimada:</b> <span style="color: #16a34a; font-weight: bold;">$${utilidadBruta.toLocaleString()} CLP</span></p>
@@ -621,7 +638,6 @@
             document.getElementById('print-modal').style.display = 'flex';
         }
 
-        // 2. INFORME PARA EL CLIENTE / DUEÑO DEL LOCAL (Sin costos de reposición, solo ventas y premios entregados)
         function openClientReport(index) {
             const m = machines[index];
             document.getElementById('report-title').innerText = `REPORTE DE OPERACIÓN Y RENDIMIENTO - ${m.name.toUpperCase()}`;
@@ -635,71 +651,71 @@
                 for(let date in m.dailyLogs) {
                     let vDia = m.dailyLogs[date].sales || 0;
                     let pDia = m.dailyLogs[date].prizes || 0;
-                    logsHtml += `<tr><td>${date}</td><td>$${vDia.toLocaleString()} CLP</td><td>${pDia} un. entregados</td></tr>`;
+                    logsHtml += `<tr><td>${date}</td><td>$${vDia.toLocaleString()} CLP</td><td>${pDia} un.</td></tr>`;
                 }
             } else {
                 logsHtml = `<tr><td colspan="3" style="text-align:center;">Registros diarios acumulándose automáticamente.</td></tr>`;
             }
 
             document.getElementById('report-content-body').innerHTML = `
-                <div style="margin-bottom: 15px; font-size: 0.85rem; line-height: 1.5; border: 1px solid #cbd5e1; padding: 12px; border-radius: 6px; background: #f8fafc;">
-                    <p style="margin-bottom: 6px;"><b>Ubicación / Terminal:</b> ${m.name}</p>
-                    <p style="margin-bottom: 6px;"><b>Venta Total Acumulada:</b> <span style="font-size: 1.1rem; color: #0284c7; font-weight: bold;">$${totalVenta.toLocaleString()} CLP</span></p>
-                    <p><b>Total Premios Entregados a Clientes:</b> <span style="font-weight: bold;">${totalPremiosEntregados} un.</span></p>
+                <div style="margin-bottom: 15px; font-size: 0.85rem; line-height: 1.5; border: 1px solid #cbd5e1; padding: 10px; border-radius: 6px; background: #f8fafc;">
+                    <p><b>Terminal:</b> ${m.name}</p>
+                    <p><b>Ubicación:</b> ${m.location || 'N/A'}</p>
+                    <p><b>Venta Total Registrada:</b> $${totalVenta.toLocaleString()} CLP</p>
+                    <p><b>Total de Premios Dispensados:</b> ${totalPremiosEntregados} un.</p>
                 </div>
-                <p style="margin-top: 15px; margin-bottom: 5px;"><b>📅 Resumen de Actividad Diaria en Local:</b></p>
+                <p><b>📅 Detalle Diario de Operación:</b></p>
                 <table class="letter-table" style="margin-top:5px;">
-                    <thead><tr><th>Fecha</th><th>Venta Total</th><th>Premios Entregados</th></tr></thead>
+                    <thead><tr><th>Fecha</th><th>Venta Diaria</th><th>Premios Entregados</th></tr></thead>
                     <tbody>${logsHtml}</tbody>
                 </table>
-                <p style="margin-top: 20px; font-size: 0.75rem; color: #64748b; text-align: center;">Este documento certifica la actividad operacional de la terminal en el establecimiento.</p>
             `;
             document.getElementById('print-modal').style.display = 'flex';
         }
 
         function openGlobalReport() {
-            document.getElementById('report-title').innerText = `INFORME FINANCIERO MENSUAL - FLOTA WINWIN`;
+            document.getElementById('report-title').innerText = `INFORME MENSUAL GLOBAL DE FLOTA - INVERSIONES WIN WIN SPA`;
             document.getElementById('report-date').innerText = `Emisión: ${new Date().toLocaleString()}`;
 
-            let totalBox = machines.reduce((a,b)=>a+b.box,0);
-            let totalSales = machines.reduce((a,b)=>a+(b.sales||0),0);
-            let totalPrizes = machines.reduce((a,b)=>a+(b.prizes||0),0);
-            let costoGlobalPremios = totalPrizes * COSTO_PREMIO;
-            let utilidadGlobalBruta = totalSales - costoGlobalPremios;
+            let totalVentaFlota = machines.reduce((acc, m) => acc + (m.sales || 0), 0);
+            let totalBoxFlota = machines.reduce((acc, m) => acc + (m.box || 0), 0);
+            let totalPremiosFlota = machines.reduce((acc, m) => acc + (m.prizes || 0), 0);
+            let costoPremiosFlota = totalPremiosFlota * COSTO_PREMIO;
+            let utilidadFlota = totalVentaFlota - costoPremiosFlota;
 
-            let tableRows = '';
-            if(machines.length === 0) {
-                tableRows = `<tr><td colspan="6" style="text-align:center;">No hay terminales activos en la flota.</td></tr>`;
-            } else {
-                machines.forEach(m => {
-                    let vM = m.sales || 0;
-                    let pM = m.prizes || 0;
-                    let cM = pM * COSTO_PREMIO;
-                    let uM = vM - cM;
-                    tableRows += `<tr><td><b>${m.name}</b><br><code style="font-size:0.65rem">${m.mac}</code></td><td>$${(m.box||0).toLocaleString()}</td><td>$${vM.toLocaleString()}</td><td>${pM} un.</td><td>$${cM.toLocaleString()}</td><td style="font-weight:bold; color:#16a34a;">$${uM.toLocaleString()}</td></tr>`;
-                });
-            }
+            let rows = machines.map(m => `
+                <tr>
+                    <td><b>${m.name}</b><br><small>${m.mac}</small></td>
+                    <td>${m.location || 'N/A'}</td>
+                    <td>$${(m.sales || 0).toLocaleString()} CLP</td>
+                    <td>${m.prizes || 0} un.</td>
+                    <td style="color:var(--accent-green); font-weight:bold;">$${((m.sales || 0) - ((m.prizes || 0) * COSTO_PREMIO)).toLocaleString()} CLP</td>
+                </tr>
+            `).join('');
 
             document.getElementById('report-content-body').innerHTML = `
                 <div style="margin-bottom: 15px; font-size: 0.85rem; line-height: 1.5; border: 1px solid #cbd5e1; padding: 10px; border-radius: 6px; background: #f8fafc;">
                     <p><b>Total Terminales en Flota:</b> ${machines.length}</p>
-                    <p><b>Venta Bruta Total de Flota:</b> $${totalSales.toLocaleString()} CLP</p>
-                    <p><b>Costo Total de Premios (${totalPrizes} un. totales):</b> -$${costoGlobalPremios.toLocaleString()} CLP</p>
-                    <p><b>Utilidad Bruta Global de Flota:</b> <span style="color: #16a34a; font-weight: bold;">$${utilidadGlobalBruta.toLocaleString()} CLP</span></p>
-                    <p><b>Efectivo Actual en Cajas (Box):</b> $${totalBox.toLocaleString()} CLP</p>
+                    <p><b>Venta Bruta Global:</b> $${totalVentaFlota.toLocaleString()} CLP</p>
+                    <p><b>Costo Total de Premios Global:</b> -$${costoPremiosFlota.toLocaleString()} CLP</p>
+                    <p><b>Utilidad Neta de Flota:</b> <span style="color: #16a34a; font-weight: bold;">$${utilidadFlota.toLocaleString()} CLP</span></p>
+                    <p><b>Efectivo Pendiente de Retiro en Cajas (Box):</b> $${totalBoxFlota.toLocaleString()} CLP</p>
                 </div>
-                <table class="letter-table">
-                    <thead><tr><th>Máquina (MAC)</th><th>Caja Física</th><th>Venta Bruta</th><th>Premios</th><th>Costo Premios</th><th>Utilidad Bruta</th></tr></thead>
-                    <tbody>${tableRows}</tbody>
+                <p><b>📊 Resumen Consolidado por Máquina:</b></p>
+                <table class="letter-table" style="margin-top:5px;">
+                    <thead><tr><th>Terminal</th><th>Ubicación</th><th>Venta Total</th><th>Premios</th><th>Utilidad Estimada</th></tr></thead>
+                    <tbody>${rows}</tbody>
                 </table>
             `;
             document.getElementById('print-modal').style.display = 'flex';
         }
 
-        function closeReport() { document.getElementById('print-modal').style.display = 'none'; }
+        function closeReport() {
+            document.getElementById('print-modal').style.display = 'none';
+        }
 
+        setInterval(fetchTelemetry, 5000);
         fetchTelemetry();
-        setInterval(fetchTelemetry, 3000);
     </script>
 </body>
 </html>
