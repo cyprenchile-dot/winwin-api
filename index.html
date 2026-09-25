@@ -504,7 +504,7 @@
                 let cInit = m.coinInitial || 100000;
                 let cFinal = m.coinFinal || cInit;
                 let cDelta = Math.max(0, cFinal - cInit);
-                let dineroRegistrado = cDelta * 500; // Asumiendo $500 por pulso/moneda
+                let dineroRegistrado = cDelta * 100; // Factor a 100 CLP por pulso
 
                 let popupContent = `<b>${m.name}</b><br>📍 ${m.location || 'Sin local'}<br>Estado: <b>${statusText}</b><br>💰 Dinero Registrado: $${dineroRegistrado.toLocaleString()} CLP`;
                 marker.bindPopup(popupContent);
@@ -542,11 +542,11 @@
                 let connClass = m.is_online ? 'online' : 'offline';
                 let connText = m.is_online ? 'ONLINE' : 'OFFLINE';
 
-                // Cálculos contadores de monedas
+                // Cálculos contadores de monedas (Ajustado a 100 CLP por pulso)
                 let cInit = m.coinInitial || 100000;
-                let cFinal = m.coinFinal || (cInit + Math.floor((m.sales || 0) / 500));
+                let cFinal = m.coinFinal || (cInit + Math.floor((m.sales || 0) / 100));
                 let cDelta = Math.max(0, cFinal - cInit);
-                let dineroRegistrado = cDelta * 500; // Contabilidad monetaria transparente
+                let dineroRegistrado = cDelta * 100; 
 
                 let statsHtml = `
                     <div class="stat-box telemetry-highlight">
@@ -637,7 +637,6 @@
             document.getElementById('modal-coin-init').value = m.coinInitial || 100000;
             document.getElementById('modal-coin-final').value = m.coinFinal || 100000;
             
-            // Si es cliente, ocultamos campos de premios en el modal por seguridad
             if (currentRole === 'cliente') {
                 document.getElementById('gerencia-counter-section').style.display = 'none';
             } else {
@@ -825,10 +824,10 @@
             const cInit = m.coinInitial || 100000;
             const cFinal = m.coinFinal || cInit;
             const cDelta = Math.max(0, cFinal - cInit);
-            const dineroRegistrado = cDelta * 500;
+            const dineroRegistrado = cDelta * 100; // Ajustado a 100 CLP por pulso
 
             if (currentRole === 'cliente') {
-                // INFORME LIMPIO Y TRANSPARENTE PARA EL LOCATARIO
+                // INFORME LIMPIO Y TRANSPARENTE PARA EL LOCATARIO (SIN PREMIOS)
                 document.getElementById('report-title').innerText = `REPORTE DE TRANSPARENCIA Y CONTABILIDAD - ${m.name.toUpperCase()}`;
                 document.getElementById('report-date').innerText = `Fecha de Emisión: ${new Date().toLocaleString()}`;
 
@@ -855,7 +854,7 @@
                         </thead>
                         <tbody>
                             <tr>
-                                <td><b>Total Ingresado en la Máquina (${cDelta} monedas × $500)</b></td>
+                                <td><b>Total Ingresado en la Máquina (${cDelta} monedas × $100)</b></td>
                                 <td style="font-size: 1.1rem; color: #059669; font-weight: bold;">$${dineroRegistrado.toLocaleString()} CLP</td>
                             </tr>
                         </tbody>
@@ -913,7 +912,7 @@
                     let cInit = m.coinInitial || 100000;
                     let cFinal = m.coinFinal || cInit;
                     let cDelta = Math.max(0, cFinal - cInit);
-                    tableRows += `<tr><td><b>${m.name}</b><br><code style="font-size:0.65rem">${m.mac}</code></td><td>$${(m.box||0).toLocaleString()}</td><td>$${(cDelta * 500).toLocaleString()}</td><td>${pMan} un.</td><td>${m.active ? 'Activa' : 'Pausada'}</td></tr>`;
+                    tableRows += `<tr><td><b>${m.name}</b><br><code style="font-size:0.65rem">${m.mac}</code></td><td>$${(m.box||0).toLocaleString()}</td><td>$${(cDelta * 100).toLocaleString()}</td><td>${pMan} un.</td><td>${m.active ? 'Activa' : 'Pausada'}</td></tr>`;
                 });
             }
 
