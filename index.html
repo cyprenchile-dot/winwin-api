@@ -288,12 +288,12 @@
             <h2>🔢 Gestión de Contadores Físicos (Auditoría)</h2>
             <input type="hidden" id="counter-index">
             <div class="edit-group">
-                <label><b>Contador Inicial Monedas (Inicio Periodo):</b></label>
+                <label><b>Contador Inicial Monedas (Fijo Periodo):</b></label>
                 <input type="number" id="modal-coin-init" placeholder="Ej: 100000">
             </div>
             <div class="edit-group">
-                <label><b>Contador Final Monedas (Lectura Cierre):</b></label>
-                <input type="number" id="modal-coin-final" placeholder="Ej: 100250">
+                <label><b>Contador Final Monedas (Base o Manual opcional):</b></label>
+                <input type="number" id="modal-coin-final" placeholder="Ej: 100000">
             </div>
             <div id="gerencia-counter-section">
                 <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 15px 0;">
@@ -502,9 +502,10 @@
                 }).addTo(fleetMap);
 
                 let cInit = m.coinInitial || 100000;
-                let cFinal = m.coinFinal || cInit;
+                let telemetryPulses = Math.floor((m.sales || 0) / 100);
+                let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
                 let cDelta = Math.max(0, cFinal - cInit);
-                let dineroRegistrado = cDelta * 100; // Factor a 100 CLP por pulso
+                let dineroRegistrado = cDelta * 100;
 
                 let popupContent = `<b>${m.name}</b><br>📍 ${m.location || 'Sin local'}<br>Estado: <b>${statusText}</b><br>💰 Dinero Registrado: $${dineroRegistrado.toLocaleString()} CLP`;
                 marker.bindPopup(popupContent);
@@ -542,9 +543,10 @@
                 let connClass = m.is_online ? 'online' : 'offline';
                 let connText = m.is_online ? 'ONLINE' : 'OFFLINE';
 
-                // Cálculos contadores de monedas (Ajustado a 100 CLP por pulso)
+                // Simulación paralela inteligente: Inicial fijo + Pulsos de telemetría en tiempo real ($100 CLP por pulso)
                 let cInit = m.coinInitial || 100000;
-                let cFinal = m.coinFinal || (cInit + Math.floor((m.sales || 0) / 100));
+                let telemetryPulses = Math.floor((m.sales || 0) / 100);
+                let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
                 let cDelta = Math.max(0, cFinal - cInit);
                 let dineroRegistrado = cDelta * 100; 
 
@@ -560,7 +562,7 @@
                     <div class="stat-box" style="grid-column: 1 / -1;">
                         <div class="counter-label-row">
                             <span>CONTADOR MONEDAS (INICIAL: ${cInit} ➔ FINAL: ${cFinal})</span>
-                            <span style="color: var(--accent-green); font-weight:bold;">Total Entradas: ${cDelta} un.</span>
+                            <span style="color: var(--accent-green); font-weight:bold;">TOTAL ENTRADAS: ${cDelta} UN.</span>
                         </div>
                         ${formatMechanicalCounter(cFinal)}
                     </div>
@@ -584,7 +586,7 @@
                         <div class="stat-box" style="grid-column: 1 / -1;">
                             <div class="counter-label-row">
                                 <span>CONTADOR PREMIOS MANUAL (INICIAL: ${pInit} ➔ FINAL: ${pFinal})</span>
-                                <span style="color: var(--accent-purple); font-weight:bold;">Entregados: ${pDelta} un.</span>
+                                <span style="color: var(--accent-purple); font-weight:bold;">ENTREGADOS: ${pDelta} UN.</span>
                             </div>
                             ${formatMechanicalCounter(pFinal)}
                         </div>
@@ -635,7 +637,11 @@
             let m = machines[index];
             document.getElementById('counter-index').value = index;
             document.getElementById('modal-coin-init').value = m.coinInitial || 100000;
-            document.getElementById('modal-coin-final').value = m.coinFinal || 100000;
+            
+            let cInit = m.coinInitial || 100000;
+            let telemetryPulses = Math.floor((m.sales || 0) / 100);
+            let cFinalCurrent = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
+            document.getElementById('modal-coin-final').value = cFinalCurrent;
             
             if (currentRole === 'cliente') {
                 document.getElementById('gerencia-counter-section').style.display = 'none';
@@ -656,8 +662,13 @@
             let index = document.getElementById('counter-index').value;
             let m = machines[index];
 
-            m.coinInitial = parseInt(document.getElementById('modal-coin-init').value) || 0;
-            m.coinFinal = parseInt(document.getElementById('modal-coin-final').value) || 0;
+            let newInit = parseInt(document.getElementById('modal-coin-init').value) || 0;
+            let newDesiredFinal = parseInt(document.getElementById('modal-coin-final').value) || 0;
+            let telemetryPulses = Math.floor((m.sales || 0) / 100);
+
+            m.coinInitial = newInit;
+            // Ajustamos la base manual restando los pulsos actuales para que el contador paralelo respete la edición del usuario
+            m.coinManualBase = newDesiredFinal - telemetryPulses;
             
             if (currentRole === 'gerencia') {
                 m.prizeInitial = parseInt(document.getElementById('modal-prize-init').value) || 0;
@@ -742,45 +753,66 @@
             if(confirm("¿Realizar el arqueo y vaciar la caja global de efectivo de toda la flota?")) {
                 let fechaHora = new Date().toLocaleString();
                 machines.forEach(m => {
-                    if (m.box > 0) {
+                    if (m.box > 0 || m.sales > 0) {
+                        let cInit = m.coinInitial || 100000;
+                        let telemetryPulses = Math.floor((m.sales || 0) / 100);
+                        let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
+                        let dineroRecaudado = (cFinal - cInit) * 100;
+
                         if (!m.withdrawalHistory) m.withdrawalHistory = [];
                         m.withdrawalHistory.unshift({
                             date: fechaHora,
                             operator: operador,
-                            amount: m.box,
+                            amount: dineroRecaudado > 0 ? dineroRecaudado : m.box,
                             note: observacion + " (Global)"
                         });
+
+                        // Consolidación de Cierre de Caja: El contador final pasa a ser el nuevo inicial y se reinicia la venta del ciclo
+                        m.coinInitial = cFinal;
+                        m.coinManualBase = undefined;
+                        m.sales = 0;
                         m.box = 0;
                     }
                 });
                 await saveStateAndSync();
                 updateUI();
-                alert(`¡Retiro global registrado con éxito por ${operador}!`);
+                alert(`¡Retiro y cierre global registrado con éxito por ${operador}! Contadores iniciales actualizados.`);
             }
         }
 
         async function resetMachineBox(index) {
             let m = machines[index];
-            let operador = prompt(`Retiro para "${m.name}". Ingresa quién realiza el retiro:`, "Daniel");
+            let operador = prompt(`Cierre de caja para "${m.name}". Ingresa quién realiza el retiro:`, "Daniel");
             if (!operador) return; 
 
-            let observacion = prompt("Ingresa alguna observación o novedad de la máquina (opcional):", "Sin novedad");
-            let montoRetirado = m.box;
+            let cInit = m.coinInitial || 100000;
+            let telemetryPulses = Math.floor((m.sales || 0) / 100);
+            let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
+            let cDelta = Math.max(0, cFinal - cInit);
+            let dineroRecaudado = cDelta * 100;
+
+            let observacion = prompt("Ingresa alguna observación o novedad del cierre (opcional):", "Cierre de turno OK");
 
             if (!m.withdrawalHistory) m.withdrawalHistory = [];
 
             m.withdrawalHistory.unshift({
                 date: new Date().toLocaleString(),
                 operator: operador,
-                amount: montoRetirado,
+                amount: dineroRecaudado > 0 ? dineroRecaudado : m.box,
+                coinsDelta: cDelta,
                 note: observacion || "Sin observaciones"
             });
 
-            m.box = 0; 
+            // CIERRE DE CAJA PROFESIONAL: El contador final actual se fija como el nuevo contador inicial para el próximo ciclo
+            m.coinInitial = cFinal;
+            m.coinManualBase = undefined;
+            m.sales = 0;
+            m.box = 0;
+
             await saveStateAndSync();
             updateUI();
 
-            alert(`✅ Retiro registrado por ${operador}\nMonto: $${montoRetirado.toLocaleString()} CLP`);
+            alert(`✅ Cierre registrado por ${operador}\nMonto recaudado: $${dineroRecaudado.toLocaleString()} CLP\nNuevo Contador Inicial fijado en: ${cFinal}`);
         }
 
         async function toggleMachine(index) {
@@ -809,7 +841,7 @@
                     lat: -33.4489,
                     lng: -70.6693,
                     sales: 0, box: 0, prizes: 0, wifi: -50, active: true, 
-                    coinInitial: 100000, coinFinal: 100000,
+                    coinInitial: 100000, 
                     prizeInitial: 50000, prizeFinal: 50000,
                     dailyLogs: {}, withdrawalHistory: [] 
                 });
@@ -822,9 +854,10 @@
         function openMachineReport(index) {
             const m = machines[index];
             const cInit = m.coinInitial || 100000;
-            const cFinal = m.coinFinal || cInit;
+            let telemetryPulses = Math.floor((m.sales || 0) / 100);
+            const cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
             const cDelta = Math.max(0, cFinal - cInit);
-            const dineroRegistrado = cDelta * 100; // Ajustado a 100 CLP por pulso
+            const dineroRegistrado = cDelta * 100;
 
             if (currentRole === 'cliente') {
                 // INFORME LIMPIO Y TRANSPARENTE PARA EL LOCATARIO (SIN PREMIOS)
@@ -873,20 +906,19 @@
                         withdrawalsHtml += `<tr><td>${w.date}</td><td><b>${w.operator}</b></td><td>$${w.amount.toLocaleString()} CLP</td><td>${w.note}</td></tr>`;
                     });
                 } else {
-                    withdrawalsHtml = `<tr><td colspan="4" style="text-align:center;">No hay retiros registrados en efectivo aún.</td></tr>`;
+                    withdrawalsHtml = `<tr><td colspan="4" style="text-align:center;">No hay cierres o retiros registrados aún.</td></tr>`;
                 }
 
                 document.getElementById('report-content-body').innerHTML = `
                     <div style="margin-bottom: 12px; font-size: 0.8rem; line-height: 1.4;">
                         <p><b>MAC:</b> <code>${m.mac}</code></p>
                         <p><b>Ubicación:</b> ${m.location || 'Local por definir'}</p>
-                        <p><b>Caja Física Actual (Box):</b> $${(m.box || 0).toLocaleString()} CLP</p>
                         <p><b>Contador Monedas (Inicio ➔ Final):</b> ${cInit} ➔ ${cFinal} (Delta: ${cDelta} un. | $${dineroRegistrado.toLocaleString()} CLP)</p>
                         <p><b>Total Premios Ciclo (Manual):</b> ${pManual} un.</p>
                     </div>
-                    <p><b>💵 Historial de Retiros y Auditoría:</b></p>
+                    <p><b>💵 Historial de Cierres de Caja y Auditoría:</b></p>
                     <table class="letter-table" style="margin-top:5px; margin-bottom:15px;">
-                        <thead><tr><th>Fecha y Hora</th><th>Responsable</th><th>Monto Retirado</th><th>Observación</th></tr></thead>
+                        <thead><tr><th>Fecha y Hora</th><th>Responsable</th><th>Monto Recaudado</th><th>Observación</th></tr></thead>
                         <tbody>${withdrawalsHtml}</tbody>
                     </table>
                 `;
@@ -900,7 +932,7 @@
             document.getElementById('report-title').innerText = `INFORME MENSUAL OFICIAL - FLOTA WINWIN`;
             document.getElementById('report-date').innerText = `Emisión: ${new Date().toLocaleString()}`;
 
-            let totalBox = machines.reduce((a,b)=>a+(b.box||0),0);
+            let totalRecaudado = 0;
             let totalPrizes = machines.reduce((a,b)=>a + Math.max(0, (b.prizeFinal||0) - (b.prizeInitial||0)),0);
 
             let tableRows = '';
@@ -910,20 +942,23 @@
                 machines.forEach(m => {
                     let pMan = Math.max(0, (m.prizeFinal||0) - (m.prizeInitial||0));
                     let cInit = m.coinInitial || 100000;
-                    let cFinal = m.coinFinal || cInit;
+                    let telemetryPulses = Math.floor((m.sales || 0) / 100);
+                    let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
                     let cDelta = Math.max(0, cFinal - cInit);
-                    tableRows += `<tr><td><b>${m.name}</b><br><code style="font-size:0.65rem">${m.mac}</code></td><td>$${(m.box||0).toLocaleString()}</td><td>$${(cDelta * 100).toLocaleString()}</td><td>${pMan} un.</td><td>${m.active ? 'Activa' : 'Pausada'}</td></tr>`;
+                    let recMachine = cDelta * 100;
+                    totalRecaudado += recMachine;
+                    tableRows += `<tr><td><b>${m.name}</b><br><code style="font-size:0.65rem">${m.mac}</code></td><td>${cInit} ➔ ${cFinal}</td><td>$${recMachine.toLocaleString()}</td><td>${pMan} un.</td><td>${m.active ? 'Activa' : 'Pausada'}</td></tr>`;
                 });
             }
 
             document.getElementById('report-content-body').innerHTML = `
                 <div style="margin-bottom: 12px; font-size: 0.8rem; line-height: 1.4;">
                     <p><b>Total Terminales:</b> ${machines.length}</p>
-                    <p><b>Caja Global Acumulada (Efectivo Actual):</b> $${totalBox.toLocaleString()} CLP</p>
+                    <p><b>Recaudación Total Calculada (Contadores):</b> $${totalRecaudado.toLocaleString()} CLP</p>
                     <p><b>Premios Totales Flota (Manuales):</b> ${totalPrizes} un.</p>
                 </div>
                 <table class="letter-table">
-                    <thead><tr><th>Máquina (MAC)</th><th>Caja Física Actual</th><th>Venta Calculada (Contador)</th><th>Premios (Manual)</th><th>Estado</th></tr></thead>
+                    <thead><tr><th>Máquina (MAC)</th><th>Contador (Inicio ➔ Final)</th><th>Recaudación Ciclo</th><th>Premios (Manual)</th><th>Estado</th></tr></thead>
                     <tbody>${tableRows}</tbody>
                 </table>
             `;
