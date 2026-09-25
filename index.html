@@ -291,19 +291,11 @@
                 <label><b>Contador Inicial Monedas (Fijo Periodo):</b></label>
                 <input type="number" id="modal-coin-init" placeholder="Ej: 3768">
             </div>
-            <div class="edit-group">
-                <label><b>Contador Final Monedas (Base o Manual opcional):</b></label>
-                <input type="number" id="modal-coin-final" placeholder="Ej: 3768">
-            </div>
             <div id="gerencia-counter-section">
                 <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 15px 0;">
                 <div class="edit-group">
                     <label><b>Contador Inicial Premios (Inicio Periodo):</b></label>
                     <input type="number" id="modal-prize-init" placeholder="Ej: 1164">
-                </div>
-                <div class="edit-group">
-                    <label><b>Contador Final Premios (Lectura Cierre):</b></label>
-                    <input type="number" id="modal-prize-final" placeholder="Ej: 1164">
                 </div>
             </div>
             <div class="edit-actions">
@@ -458,8 +450,10 @@
                 if (m.is_online) onlineCount++;
                 totalDaily += (m.sales || 0);
                 totalBox += (m.box || 0);
-                let pManual = ((m.prizeFinal || 0) - (m.prizeInitial || 0));
-                totalPrizes += (pManual >= 0 ? pManual : (m.prizes || 0));
+                
+                let pDelta = m.prizes || 0;
+                totalPrizes += pDelta;
+
                 wifiSum += (m.wifi || -50);
             });
 
@@ -503,8 +497,8 @@
 
                 let cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
                 let telemetryPulses = Math.floor((m.sales || 0) / 100);
-                let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
-                let cDelta = Math.max(0, cFinal - cInit);
+                let cFinal = cInit + telemetryPulses; // Correlativo perfecto
+                let cDelta = telemetryPulses;
                 let dineroRegistrado = cDelta * 100;
 
                 let popupContent = `<b>${m.name}</b><br>📍 ${m.location || 'Sin local'}<br>Estado: <b>${statusText}</b><br>💰 Dinero Registrado: $${dineroRegistrado.toLocaleString()} CLP`;
@@ -543,12 +537,12 @@
                 let connClass = m.is_online ? 'online' : 'offline';
                 let connText = m.is_online ? 'ONLINE' : 'OFFLINE';
 
-                // Inicial seguro y cálculo paralelo en vivo ($100 CLP por pulso)
+                // CORRELATIVO PERFECTO: C_Final = C_Init + Delta (Pulsos de telemetría)
                 if (m.coinInitial === undefined) m.coinInitial = 3768;
                 let cInit = m.coinInitial;
                 let telemetryPulses = Math.floor((m.sales || 0) / 100);
-                let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
-                let cDelta = Math.max(0, cFinal - cInit);
+                let cFinal = cInit + telemetryPulses; // Ejemplo: 3776 + 1 = 3777
+                let cDelta = telemetryPulses;
                 let dineroRegistrado = cDelta * 100; 
 
                 let statsHtml = `
@@ -568,23 +562,22 @@
                         ${formatMechanicalCounter(cFinal)}
                     </div>
                     <div class="stat-box">
-                        <span>SEÑAL WI-FI</span>
+                        <span>SEÑAL WI-VI</span>
                         <b>${m.wifi || -50} dBm</b>
                     </div>
                 `;
 
-                // Si es Gerencia, mostramos también la sección de premios completa
+                // Si es Gerencia, mostramos también la sección de premios completa con correlativo
                 if (currentRole === 'gerencia') {
                     if (m.prizeInitial === undefined) m.prizeInitial = 1164;
-                    if (m.prizeFinal === undefined) m.prizeFinal = 1164;
                     let pInit = m.prizeInitial;
-                    let pFinal = m.prizeFinal;
-                    let pDelta = Math.max(0, pFinal - pInit);
+                    let pDelta = m.prizes || 0;
+                    let pFinal = pInit + pDelta; // Correlativo perfecto para premios (Ej: 1164 + 0 = 1164)
 
                     statsHtml += `
                         <div class="stat-box telemetry-highlight">
                             <span>PREMIOS (TELEMETRÍA)</span>
-                            <b style="color: #a855f7; font-size: 1.2rem;">${m.prizes || 0} un.</b>
+                            <b style="color: #a855f7; font-size: 1.2rem;">${pDelta} un.</b>
                         </div>
                         <div class="stat-box" style="grid-column: 1 / -1;">
                             <div class="counter-label-row">
@@ -635,7 +628,7 @@
             });
         }
 
-        // Modal de Contadores Físicos Inicial/Final (Robusto y corregido)
+        // Modal de Contadores Físicos Inicial
         function openCounterModal(index) {
             let m = machines[index];
             document.getElementById('counter-index').value = index;
@@ -643,16 +636,12 @@
             let cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
             document.getElementById('modal-coin-init').value = cInit;
             
-            let telemetryPulses = Math.floor((m.sales || 0) / 100);
-            let cFinalCurrent = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
-            document.getElementById('modal-coin-final').value = cFinalCurrent;
-            
             if (currentRole === 'cliente') {
                 document.getElementById('gerencia-counter-section').style.display = 'none';
             } else {
                 document.getElementById('gerencia-counter-section').style.display = 'block';
-                document.getElementById('modal-prize-init').value = m.prizeInitial !== undefined ? m.prizeInitial : 1164;
-                document.getElementById('modal-prize-final').value = m.prizeFinal !== undefined ? m.prizeFinal : 1164;
+                let pInit = m.prizeInitial !== undefined ? m.prizeInitial : 1164;
+                document.getElementById('modal-prize-init').value = pInit;
             }
 
             document.getElementById('counter-modal').style.display = 'flex';
@@ -667,27 +656,21 @@
             let m = machines[index];
 
             let rawInit = document.getElementById('modal-coin-init').value;
-            let rawFinal = document.getElementById('modal-coin-final').value;
-
-            let newInit = rawInit !== "" ? parseInt(rawInit) : (m.coinInitial !== undefined ? m.coinInitial : 3768);
-            let telemetryPulses = Math.floor((m.sales || 0) / 100);
-            
-            let newDesiredFinal = rawFinal !== "" ? parseInt(rawFinal) : (newInit + telemetryPulses);
-
-            m.coinInitial = newInit;
-            m.coinManualBase = newDesiredFinal - telemetryPulses;
+            if (rawInit !== "") {
+                m.coinInitial = parseInt(rawInit);
+            }
             
             if (currentRole === 'gerencia') {
                 let rawPInit = document.getElementById('modal-prize-init').value;
-                let rawPFinal = document.getElementById('modal-prize-final').value;
-                m.prizeInitial = rawPInit !== "" ? parseInt(rawPInit) : (m.prizeInitial !== undefined ? m.prizeInitial : 1164);
-                m.prizeFinal = rawPFinal !== "" ? parseInt(rawPFinal) : (m.prizeFinal !== undefined ? m.prizeFinal : 1164);
+                if (rawPInit !== "") {
+                    m.prizeInitial = parseInt(rawPInit);
+                }
             }
 
             await saveStateAndSync();
             updateUI();
             closeCounterModal();
-            alert("✅ Contadores físicos actualizados con éxito.");
+            alert("✅ Contador inicial actualizado con éxito.");
         }
 
         function filterMachines() {
@@ -764,8 +747,8 @@
                 machines.forEach(m => {
                     let cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
                     let telemetryPulses = Math.floor((m.sales || 0) / 100);
-                    let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
-                    let cDelta = Math.max(0, cFinal - cInit);
+                    let cFinal = cInit + telemetryPulses;
+                    let cDelta = telemetryPulses;
                     let dineroRecaudado = cDelta * 100;
 
                     if (cDelta > 0 || m.box > 0) {
@@ -780,11 +763,11 @@
                             note: observacion + " (Global)"
                         });
 
-                        // Cierre consolidado: el final actual se convierte en el inicial del próximo ciclo
+                        // Cierre consolidado correlativo: el final actual pasa a ser el nuevo inicial
                         m.coinInitial = cFinal;
-                        m.coinManualBase = undefined;
                         m.sales = 0;
                         m.box = 0;
+                        m.prizes = 0;
                     }
                 });
                 await saveStateAndSync();
@@ -800,8 +783,8 @@
 
             let cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
             let telemetryPulses = Math.floor((m.sales || 0) / 100);
-            let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
-            let cDelta = Math.max(0, cFinal - cInit);
+            let cFinal = cInit + telemetryPulses;
+            let cDelta = telemetryPulses;
             let dineroRecaudado = cDelta * 100;
 
             let observacion = prompt("Ingresa alguna observación o novedad del cierre (opcional):", "Cierre de turno OK");
@@ -818,11 +801,11 @@
                 note: observacion || "Sin observaciones"
             });
 
-            // Cierre consolidado profesional: fijamos el contador final como el nuevo inicial
+            // Cierre consolidado correlativo: fijamos el contador final como el nuevo inicial
             m.coinInitial = cFinal;
-            m.coinManualBase = undefined;
             m.sales = 0;
             m.box = 0;
+            m.prizes = 0;
 
             await saveStateAndSync();
             updateUI();
@@ -857,7 +840,7 @@
                     lng: -70.6693,
                     sales: 0, box: 0, prizes: 0, wifi: -50, active: true, 
                     coinInitial: 3768, 
-                    prizeInitial: 1164, prizeFinal: 1164,
+                    prizeInitial: 1164, 
                     dailyLogs: {}, withdrawalHistory: [] 
                 });
                 await saveStateAndSync();
@@ -880,8 +863,8 @@
             } else {
                 cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
                 let telemetryPulses = Math.floor((m.sales || 0) / 100);
-                cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
-                cDelta = Math.max(0, cFinal - cInit);
+                cFinal = cInit + telemetryPulses;
+                cDelta = telemetryPulses;
                 dineroRegistrado = cDelta * 100;
             }
 
@@ -925,7 +908,10 @@
                 document.getElementById('report-title').innerText = `INFORME TÉCNICO Y FINANCIERO - ${m.name.toUpperCase()}`;
                 document.getElementById('report-date').innerText = `Emisión: ${new Date().toLocaleString()}`;
 
-                let pManual = Math.max(0, (m.prizeFinal || 0) - (m.prizeInitial || 0));
+                let pInit = m.prizeInitial !== undefined ? m.prizeInitial : 1164;
+                let pDelta = m.prizes || 0;
+                let pFinal = pInit + pDelta;
+
                 let withdrawalsHtml = '';
                 if(m.withdrawalHistory && m.withdrawalHistory.length > 0) {
                     m.withdrawalHistory.forEach(w => {
@@ -941,7 +927,7 @@
                         <p><b>MAC:</b> <code>${m.mac}</code></p>
                         <p><b>Ubicación:</b> ${m.location || 'Local por definir'}</p>
                         <p><b>Contador Monedas (Inicio ➔ Final):</b> ${cInit} ➔ ${cFinal} (Delta: ${cDelta} un. | $${dineroRegistrado.toLocaleString()} CLP)</p>
-                        <p><b>Total Premios Ciclo (Manual):</b> ${pManual} un.</p>
+                        <p><b>Contador Premios (Inicio ➔ Final):</b> ${pInit} ➔ ${pFinal} (Entregados: ${pDelta} un.)</p>
                     </div>
                     <p><b>💵 Historial de Cierres de Caja y Auditoría:</b></p>
                     <table class="letter-table" style="margin-top:5px; margin-bottom:15px;">
@@ -960,21 +946,24 @@
             document.getElementById('report-date').innerText = `Emisión: ${new Date().toLocaleString()}`;
 
             let totalRecaudado = 0;
-            let totalPrizes = machines.reduce((a,b)=>a + Math.max(0, (b.prizeFinal||0) - (b.prizeInitial||0)),0);
+            let totalPrizes = machines.reduce((a,b)=>a + (b.prizes||0), 0);
 
             let tableRows = '';
             if(machines.length === 0) {
                 tableRows = `<tr><td colspan="5" style="text-align:center;">No hay terminales activos en la flota.</td></tr>`;
             } else {
                 machines.forEach(m => {
-                    let pMan = Math.max(0, (m.prizeFinal||0) - (m.prizeInitial||0));
+                    let pInit = m.prizeInitial !== undefined ? m.prizeInitial : 1164;
+                    let pDelta = m.prizes || 0;
+                    let pFinal = pInit + pDelta;
+
                     let cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
                     let telemetryPulses = Math.floor((m.sales || 0) / 100);
-                    let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
-                    let cDelta = Math.max(0, cFinal - cInit);
+                    let cFinal = cInit + telemetryPulses;
+                    let cDelta = telemetryPulses;
                     let recMachine = cDelta * 100;
                     totalRecaudado += recMachine;
-                    tableRows += `<tr><td><b>${m.name}</b><br><code style="font-size:0.65rem">${m.mac}</code></td><td>${cInit} ➔ ${cFinal}</td><td>$${recMachine.toLocaleString()}</td><td>${pMan} un.</td><td>${m.active ? 'Activa' : 'Pausada'}</td></tr>`;
+                    tableRows += `<tr><td><b>${m.name}</b><br><code style="font-size:0.65rem">${m.mac}</code></td><td>${cInit} ➔ ${cFinal}</td><td>$${recMachine.toLocaleString()}</td><td>${pDelta} un.</td><td>${m.active ? 'Activa' : 'Pausada'}</td></tr>`;
                 });
             }
 
@@ -982,10 +971,10 @@
                 <div style="margin-bottom: 12px; font-size: 0.8rem; line-height: 1.4;">
                     <p><b>Total Terminales:</b> ${machines.length}</p>
                     <p><b>Recaudación Total Calculada (Contadores):</b> $${totalRecaudado.toLocaleString()} CLP</p>
-                    <p><b>Premios Totales Flota (Manuales):</b> ${totalPrizes} un.</p>
+                    <p><b>Premios Totales Flota (Telemetría):</b> ${totalPrizes} un.</p>
                 </div>
                 <table class="letter-table">
-                    <thead><tr><th>Máquina (MAC)</th><th>Contador (Inicio ➔ Final)</th><th>Recaudación Ciclo</th><th>Premios (Manual)</th><th>Estado</th></tr></thead>
+                    <thead><tr><th>Máquina (MAC)</th><th>Contador (Inicio ➔ Final)</th><th>Recaudación Ciclo</th><th>Premios</th><th>Estado</th></tr></thead>
                     <tbody>${tableRows}</tbody>
                 </table>
             `;
