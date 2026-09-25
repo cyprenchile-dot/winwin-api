@@ -292,18 +292,18 @@
                 <input type="number" id="modal-coin-init" placeholder="Ej: 3768">
             </div>
             <div class="edit-group">
-                <label><b>Contador Final Monedas (Lectura Cierre / Base):</b></label>
+                <label><b>Contador Final Monedas (Base o Manual opcional):</b></label>
                 <input type="number" id="modal-coin-final" placeholder="Ej: 3768">
             </div>
             <div id="gerencia-counter-section">
                 <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 15px 0;">
                 <div class="edit-group">
                     <label><b>Contador Inicial Premios (Inicio Periodo):</b></label>
-                    <input type="number" id="modal-prize-init" placeholder="Ej: 50000">
+                    <input type="number" id="modal-prize-init" placeholder="Ej: 1164">
                 </div>
                 <div class="edit-group">
                     <label><b>Contador Final Premios (Lectura Cierre):</b></label>
-                    <input type="number" id="modal-prize-final" placeholder="Ej: 50040">
+                    <input type="number" id="modal-prize-final" placeholder="Ej: 1164">
                 </div>
             </div>
             <div class="edit-actions">
@@ -635,10 +635,11 @@
             });
         }
 
-        // Modal de Contadores Físicos Inicial/Final
+        // Modal de Contadores Físicos Inicial/Final (Robusto y corregido)
         function openCounterModal(index) {
             let m = machines[index];
             document.getElementById('counter-index').value = index;
+            
             let cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
             document.getElementById('modal-coin-init').value = cInit;
             
@@ -665,16 +666,22 @@
             let index = document.getElementById('counter-index').value;
             let m = machines[index];
 
-            let newInit = parseInt(document.getElementById('modal-coin-init').value) || 0;
-            let newDesiredFinal = parseInt(document.getElementById('modal-coin-final').value) || 0;
+            let rawInit = document.getElementById('modal-coin-init').value;
+            let rawFinal = document.getElementById('modal-coin-final').value;
+
+            let newInit = rawInit !== "" ? parseInt(rawInit) : (m.coinInitial !== undefined ? m.coinInitial : 3768);
             let telemetryPulses = Math.floor((m.sales || 0) / 100);
+            
+            let newDesiredFinal = rawFinal !== "" ? parseInt(rawFinal) : (newInit + telemetryPulses);
 
             m.coinInitial = newInit;
             m.coinManualBase = newDesiredFinal - telemetryPulses;
             
             if (currentRole === 'gerencia') {
-                m.prizeInitial = parseInt(document.getElementById('modal-prize-init').value) || 0;
-                m.prizeFinal = parseInt(document.getElementById('modal-prize-final').value) || 0;
+                let rawPInit = document.getElementById('modal-prize-init').value;
+                let rawPFinal = document.getElementById('modal-prize-final').value;
+                m.prizeInitial = rawPInit !== "" ? parseInt(rawPInit) : (m.prizeInitial !== undefined ? m.prizeInitial : 1164);
+                m.prizeFinal = rawPFinal !== "" ? parseInt(rawPFinal) : (m.prizeFinal !== undefined ? m.prizeFinal : 1164);
             }
 
             await saveStateAndSync();
@@ -862,7 +869,6 @@
         function openMachineReport(index) {
             const m = machines[index];
             
-            // Si hay un historial de cierre reciente, usamos esos valores cerrados; si no, calculamos el periodo activo actual
             let lastClosure = (m.withdrawalHistory && m.withdrawalHistory.length > 0 && m.sales === 0) ? m.withdrawalHistory[0] : null;
             
             let cInit, cFinal, cDelta, dineroRegistrado;
