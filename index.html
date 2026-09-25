@@ -667,7 +667,6 @@
             let telemetryPulses = Math.floor((m.sales || 0) / 100);
 
             m.coinInitial = newInit;
-            // Ajustamos la base manual restando los pulsos actuales para que el contador paralelo respete la edición del usuario
             m.coinManualBase = newDesiredFinal - telemetryPulses;
             
             if (currentRole === 'gerencia') {
@@ -753,21 +752,25 @@
             if(confirm("¿Realizar el arqueo y vaciar la caja global de efectivo de toda la flota?")) {
                 let fechaHora = new Date().toLocaleString();
                 machines.forEach(m => {
-                    if (m.box > 0 || m.sales > 0) {
-                        let cInit = m.coinInitial || 100000;
-                        let telemetryPulses = Math.floor((m.sales || 0) / 100);
-                        let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
-                        let dineroRecaudado = (cFinal - cInit) * 100;
+                    let cInit = m.coinInitial || 100000;
+                    let telemetryPulses = Math.floor((m.sales || 0) / 100);
+                    let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
+                    let cDelta = Math.max(0, cFinal - cInit);
+                    let dineroRecaudado = cDelta * 100;
 
+                    if (cDelta > 0 || m.box > 0) {
                         if (!m.withdrawalHistory) m.withdrawalHistory = [];
                         m.withdrawalHistory.unshift({
                             date: fechaHora,
                             operator: operador,
                             amount: dineroRecaudado > 0 ? dineroRecaudado : m.box,
+                            coinInit: cInit,
+                            coinFinal: cFinal,
+                            coinsDelta: cDelta,
                             note: observacion + " (Global)"
                         });
 
-                        // Consolidación de Cierre de Caja: El contador final pasa a ser el nuevo inicial y se reinicia la venta del ciclo
+                        // Cierre consolidado: el final actual se convierte en el inicial del próximo ciclo
                         m.coinInitial = cFinal;
                         m.coinManualBase = undefined;
                         m.sales = 0;
@@ -798,12 +801,14 @@
             m.withdrawalHistory.unshift({
                 date: new Date().toLocaleString(),
                 operator: operador,
-                amount: dineroRecaudado > 0 ? dineroRecaudado : m.box,
+                amount: dineroRecaudado,
+                coinInit: cInit,
+                coinFinal: cFinal,
                 coinsDelta: cDelta,
                 note: observacion || "Sin observaciones"
             });
 
-            // CIERRE DE CAJA PROFESIONAL: El contador final actual se fija como el nuevo contador inicial para el próximo ciclo
+            // Cierre consolidado profesional: fijamos el contador final como el nuevo inicial
             m.coinInitial = cFinal;
             m.coinManualBase = undefined;
             m.sales = 0;
@@ -812,7 +817,7 @@
             await saveStateAndSync();
             updateUI();
 
-            alert(`✅ Cierre registrado por ${operador}\nMonto recaudado: $${dineroRecaudado.toLocaleString()} CLP\nNuevo Contador Inicial fijado en: ${cFinal}`);
+            alert(`✅ Cierre registrado por ${operador}\nMonto recaudado: $${dineroRecaudado.toLocaleString()} CLP (${cDelta} monedas)\nNuevo Contador Inicial fijado en: ${cFinal}`);
         }
 
         async function toggleMachine(index) {
@@ -853,11 +858,23 @@
 
         function openMachineReport(index) {
             const m = machines[index];
-            const cInit = m.coinInitial || 100000;
-            let telemetryPulses = Math.floor((m.sales || 0) / 100);
-            const cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
-            const cDelta = Math.max(0, cFinal - cInit);
-            const dineroRegistrado = cDelta * 100;
+            
+            // Si hay un historial de cierre reciente, usamos esos valores cerrados; si no, calculamos el periodo activo actual
+            let lastClosure = (m.withdrawalHistory && m.withdrawalHistory.length > 0 && m.sales === 0) ? m.withdrawalHistory[0] : null;
+            
+            let cInit, cFinal, cDelta, dineroRegistrado;
+            if (lastClosure && lastClosure.coinInit !== undefined) {
+                cInit = lastClosure.coinInit;
+                cFinal = lastClosure.coinFinal;
+                cDelta = lastClosure.coinsDelta;
+                dineroRegistrado = lastClosure.amount;
+            } else {
+                cInit = m.coinInitial || 100000;
+                let telemetryPulses = Math.floor((m.sales || 0) / 100);
+                cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
+                cDelta = Math.max(0, cFinal - cInit);
+                dineroRegistrado = cDelta * 100;
+            }
 
             if (currentRole === 'cliente') {
                 // INFORME LIMPIO Y TRANSPARENTE PARA EL LOCATARIO (SIN PREMIOS)
@@ -903,7 +920,8 @@
                 let withdrawalsHtml = '';
                 if(m.withdrawalHistory && m.withdrawalHistory.length > 0) {
                     m.withdrawalHistory.forEach(w => {
-                        withdrawalsHtml += `<tr><td>${w.date}</td><td><b>${w.operator}</b></td><td>$${w.amount.toLocaleString()} CLP</td><td>${w.note}</td></tr>`;
+                        let detalleMonedas = (w.coinsDelta !== undefined) ? ` (${w.coinsDelta} un.)` : '';
+                        withdrawalsHtml += `<tr><td>${w.date}</td><td><b>${w.operator}</b></td><td>$${w.amount.toLocaleString()} CLP${detalleMonedas}</td><td>${w.note}</td></tr>`;
                     });
                 } else {
                     withdrawalsHtml = `<tr><td colspan="4" style="text-align:center;">No hay cierres o retiros registrados aún.</td></tr>`;
