@@ -289,11 +289,11 @@
             <input type="hidden" id="counter-index">
             <div class="edit-group">
                 <label><b>Contador Inicial Monedas (Fijo Periodo):</b></label>
-                <input type="number" id="modal-coin-init" placeholder="Ej: 100000">
+                <input type="number" id="modal-coin-init" placeholder="Ej: 3768">
             </div>
             <div class="edit-group">
-                <label><b>Contador Final Monedas (Base o Manual opcional):</b></label>
-                <input type="number" id="modal-coin-final" placeholder="Ej: 100000">
+                <label><b>Contador Final Monedas (Lectura Cierre / Base):</b></label>
+                <input type="number" id="modal-coin-final" placeholder="Ej: 3768">
             </div>
             <div id="gerencia-counter-section">
                 <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 15px 0;">
@@ -501,7 +501,7 @@
                     fillOpacity: 0.9
                 }).addTo(fleetMap);
 
-                let cInit = m.coinInitial || 100000;
+                let cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
                 let telemetryPulses = Math.floor((m.sales || 0) / 100);
                 let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
                 let cDelta = Math.max(0, cFinal - cInit);
@@ -543,8 +543,9 @@
                 let connClass = m.is_online ? 'online' : 'offline';
                 let connText = m.is_online ? 'ONLINE' : 'OFFLINE';
 
-                // Simulación paralela inteligente: Inicial fijo + Pulsos de telemetría en tiempo real ($100 CLP por pulso)
-                let cInit = m.coinInitial || 100000;
+                // Inicial seguro y cálculo paralelo en vivo ($100 CLP por pulso)
+                if (m.coinInitial === undefined) m.coinInitial = 3768;
+                let cInit = m.coinInitial;
                 let telemetryPulses = Math.floor((m.sales || 0) / 100);
                 let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
                 let cDelta = Math.max(0, cFinal - cInit);
@@ -574,8 +575,10 @@
 
                 // Si es Gerencia, mostramos también la sección de premios completa
                 if (currentRole === 'gerencia') {
-                    let pInit = m.prizeInitial || 50000;
-                    let pFinal = m.prizeFinal || (pInit + (m.prizes || 0));
+                    if (m.prizeInitial === undefined) m.prizeInitial = 1164;
+                    if (m.prizeFinal === undefined) m.prizeFinal = 1164;
+                    let pInit = m.prizeInitial;
+                    let pFinal = m.prizeFinal;
                     let pDelta = Math.max(0, pFinal - pInit);
 
                     statsHtml += `
@@ -636,9 +639,9 @@
         function openCounterModal(index) {
             let m = machines[index];
             document.getElementById('counter-index').value = index;
-            document.getElementById('modal-coin-init').value = m.coinInitial || 100000;
+            let cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
+            document.getElementById('modal-coin-init').value = cInit;
             
-            let cInit = m.coinInitial || 100000;
             let telemetryPulses = Math.floor((m.sales || 0) / 100);
             let cFinalCurrent = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
             document.getElementById('modal-coin-final').value = cFinalCurrent;
@@ -647,8 +650,8 @@
                 document.getElementById('gerencia-counter-section').style.display = 'none';
             } else {
                 document.getElementById('gerencia-counter-section').style.display = 'block';
-                document.getElementById('modal-prize-init').value = m.prizeInitial || 50000;
-                document.getElementById('modal-prize-final').value = m.prizeFinal || 50000;
+                document.getElementById('modal-prize-init').value = m.prizeInitial !== undefined ? m.prizeInitial : 1164;
+                document.getElementById('modal-prize-final').value = m.prizeFinal !== undefined ? m.prizeFinal : 1164;
             }
 
             document.getElementById('counter-modal').style.display = 'flex';
@@ -752,7 +755,7 @@
             if(confirm("¿Realizar el arqueo y vaciar la caja global de efectivo de toda la flota?")) {
                 let fechaHora = new Date().toLocaleString();
                 machines.forEach(m => {
-                    let cInit = m.coinInitial || 100000;
+                    let cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
                     let telemetryPulses = Math.floor((m.sales || 0) / 100);
                     let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
                     let cDelta = Math.max(0, cFinal - cInit);
@@ -788,7 +791,7 @@
             let operador = prompt(`Cierre de caja para "${m.name}". Ingresa quién realiza el retiro:`, "Daniel");
             if (!operador) return; 
 
-            let cInit = m.coinInitial || 100000;
+            let cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
             let telemetryPulses = Math.floor((m.sales || 0) / 100);
             let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
             let cDelta = Math.max(0, cFinal - cInit);
@@ -846,8 +849,8 @@
                     lat: -33.4489,
                     lng: -70.6693,
                     sales: 0, box: 0, prizes: 0, wifi: -50, active: true, 
-                    coinInitial: 100000, 
-                    prizeInitial: 50000, prizeFinal: 50000,
+                    coinInitial: 3768, 
+                    prizeInitial: 1164, prizeFinal: 1164,
                     dailyLogs: {}, withdrawalHistory: [] 
                 });
                 await saveStateAndSync();
@@ -869,7 +872,7 @@
                 cDelta = lastClosure.coinsDelta;
                 dineroRegistrado = lastClosure.amount;
             } else {
-                cInit = m.coinInitial || 100000;
+                cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
                 let telemetryPulses = Math.floor((m.sales || 0) / 100);
                 cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
                 cDelta = Math.max(0, cFinal - cInit);
@@ -959,7 +962,7 @@
             } else {
                 machines.forEach(m => {
                     let pMan = Math.max(0, (m.prizeFinal||0) - (m.prizeInitial||0));
-                    let cInit = m.coinInitial || 100000;
+                    let cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
                     let telemetryPulses = Math.floor((m.sales || 0) / 100);
                     let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
                     let cDelta = Math.max(0, cFinal - cInit);
