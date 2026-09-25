@@ -48,6 +48,33 @@
         .card .value { font-size: 1.4rem; font-weight: 800; color: #fff; text-shadow: 0 2px 4px rgba(0,0,0,0.3); }
         .card .subtext { font-size: 0.65rem; color: var(--accent-green); margin-top: 4px; font-weight: 600; }
 
+        /* ESTILO CONTADOR MECÁNICO / MEDIDOR 6 DÍGITOS */
+        .mechanical-counter {
+            display: inline-flex;
+            background: #020617;
+            border: 2px solid #334155;
+            border-radius: 4px;
+            padding: 2px 4px;
+            gap: 2px;
+            font-family: 'Courier New', Courier, monospace;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.8);
+            margin-top: 4px;
+        }
+        .counter-digit {
+            background: #0f172a;
+            color: #f8fafc;
+            font-size: 0.9rem;
+            font-weight: bold;
+            width: 18px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 2px;
+            border: 1px solid #1e293b;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+        }
+
         /* SECCIÓN DE MÁQUINAS */
         .machines-section { margin-bottom: 15px; }
         .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 10px; }
@@ -83,7 +110,7 @@
         .btn-delete { background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); }
         .btn-delete:hover { background: #ef4444; color: white; }
 
-        /* MAPA GENERAL DE LA FLOTA (UBICADO DEBAJO DE LAS MÁQUINAS) */
+        /* MAPA GENERAL DE LA FLOTA */
         .fleet-map-card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 15px; display: flex; flex-direction: column; margin-bottom: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
         .fleet-map-card h2 { font-size: 0.95rem; margin-bottom: 10px; color: var(--text-main); font-weight: 700; }
         #dashboard-map { width: 100%; height: 350px; border-radius: 8px; border: 1px solid var(--border-color); }
@@ -141,14 +168,15 @@
         </div>
         <div class="status-badge" id="server-status">ONLINE</div>
         <div class="header-actions" style="margin-top: 8px;">
-            <button class="btn" onclick="registerMachine()">+ Registrar MAC</button>
+            <button class="btn btn-secondary" id="role-toggle-btn" onclick="toggleUserRole()">👤 Rol: Gerencia (Admin)</button>
+            <button class="btn" onclick="registerMachine()" id="btn-reg">+ Registrar MAC</button>
             <button class="btn btn-purple" onclick="openGlobalReport()">📄 Informe Mensual / Flota</button>
-            <button class="btn btn-danger" onclick="resetGlobalBox()" style="flex:unset;">Vaciar Caja Global</button>
+            <button class="btn btn-danger" onclick="resetGlobalBox()" id="btn-vaciar-global" style="flex:unset;">Vaciar Caja Global</button>
         </div>
     </header>
 
     <!-- CONTADORES DESTACADOS -->
-    <div class="metrics-grid">
+    <div class="metrics-grid" id="metrics-grid-container">
         <div class="card">
             <h3>Terminales Activos</h3>
             <div class="value" id="active-terminals">0</div>
@@ -164,8 +192,8 @@
             <div class="value" id="box-total">$0 CLP</div>
             <div class="subtext">Acumulado hasta retiro</div>
         </div>
-        <div class="card" style="border-left: 3px solid var(--accent-purple);">
-            <h3>Premios Totales</h3>
+        <div class="card gerencia-only" style="border-left: 3px solid var(--accent-purple);">
+            <h3>Premios Totales Flota</h3>
             <div class="value" id="total-prizes">0 un.</div>
             <div class="subtext">Dispensador</div>
         </div>
@@ -174,7 +202,7 @@
             <div class="value" id="wifi-signal">0 dBm</div>
             <div class="subtext">Estabilidad</div>
         </div>
-        <div class="card" style="border-left: 3px solid var(--accent-green);">
+        <div class="card gerencia-only" style="border-left: 3px solid var(--accent-green);">
             <h3>Eficiencia Flota</h3>
             <div class="value" id="fleet-efficiency">0%</div>
             <div class="subtext">Ratio venta/premio</div>
@@ -190,14 +218,14 @@
         <div class="machines-grid" id="machines-container"></div>
     </div>
 
-    <!-- MAPA GENERAL DE LA FLOTA (UBICADO DEBAJO DE LAS MÁQUINAS) -->
+    <!-- MAPA GENERAL DE LA FLOTA -->
     <div class="fleet-map-card">
         <h2>🌍 Ubicación de Flota en Terreno</h2>
         <div id="dashboard-map"></div>
     </div>
 
     <!-- ANALYTICS -->
-    <div class="analytics-grid">
+    <div class="analytics-grid gerencia-only">
         <div class="analytics-card">
             <div class="analytics-header">
                 <h2>Tendencia de Venta Diaria</h2>
@@ -265,6 +293,9 @@
     </div>
 
     <script>
+        // Rol actual: 'gerencia' o 'cliente'
+        let currentRole = 'gerencia';
+
         const ctx = document.getElementById('salesChart').getContext('2d');
         const salesChart = new Chart(ctx, {
             type: 'line',
@@ -306,6 +337,40 @@
                 attribution: '&copy; OpenStreetMap contributors'
             }).addTo(fleetMap);
         });
+
+        function toggleUserRole() {
+            if (currentRole === 'gerencia') {
+                currentRole = 'cliente';
+                document.getElementById('role-toggle-btn').innerText = "🔒 Rol: Cliente (Vista Local)";
+                document.getElementById('role-toggle-btn').style.background = "var(--accent-purple)";
+                document.getElementById('btn-reg').style.display = 'none';
+                document.getElementById('btn-vaciar-global').style.display = 'none';
+                
+                // Ocultar elementos exclusivos de gerencia
+                document.querySelectorAll('.gerencia-only').forEach(el => el.style.display = 'none');
+            } else {
+                currentRole = 'gerencia';
+                document.getElementById('role-toggle-btn').innerText = "👤 Rol: Gerencia (Admin)";
+                document.getElementById('role-toggle-btn').style.background = "var(--accent-blue)";
+                document.getElementById('btn-reg').style.display = 'inline-block';
+                document.getElementById('btn-vaciar-global').style.display = 'inline-block';
+
+                // Mostrar elementos exclusivos de gerencia
+                document.querySelectorAll('.gerencia-only').forEach(el => el.style.display = '');
+            }
+            updateUI();
+        }
+
+        // Función auxiliar para formatear número en 6 dígitos estilo contador mecánico (ej: 000142)
+        function formatMechanicalCounter(value) {
+            let str = String(value || 0).padStart(6, '0');
+            let html = '<div class="mechanical-counter">';
+            for(let char of str) {
+                html += `<div class="counter-digit">${char}</div>`;
+            }
+            html += '</div>';
+            return html;
+        }
 
         async function saveStateAndSync() {
             try {
@@ -379,7 +444,7 @@
             listToRender.forEach(m => {
                 let lat = m.lat || -33.4489;
                 let lng = m.lng || -70.6693;
-                let pinColor = m.is_online ? '#10b981' : '#ef4444'; // Verde si online, Rojo si offline
+                let pinColor = m.is_online ? '#10b981' : '#ef4444'; 
                 let statusText = m.is_online ? 'ONLINE' : 'OFFLINE';
 
                 let marker = L.circleMarker([lat, lng], {
@@ -391,7 +456,11 @@
                     fillOpacity: 0.9
                 }).addTo(fleetMap);
 
-                marker.bindPopup(`<b>${m.name}</b><br>📍 ${m.location || 'Sin local'}<br>Estado: <b>${statusText}</b><br>💰 Caja: $${(m.box||0).toLocaleString()} CLP`);
+                let popupContent = `<b>${m.name}</b><br>📍 ${m.location || 'Sin local'}<br>Estado: <b>${statusText}</b><br>💰 Caja: $${(m.box||0).toLocaleString()} CLP`;
+                if (currentRole === 'gerencia') {
+                    popupContent += `<br>🎁 Premios: ${m.prizes || 0} un.`;
+                }
+                marker.bindPopup(popupContent);
                 fleetMarkers.push(marker);
             });
         }
@@ -415,7 +484,7 @@
             const container = document.getElementById('machines-container');
             container.innerHTML = '';
             if(listToRender.length === 0) {
-                container.innerHTML = `<p style="color: var(--text-muted); grid-column: 1/-1; font-size: 0.85rem; text-align: center; padding: 20px;">No hay máquinas registradas. Haz clic en "+ Registrar MAC" para dar de alta tu primer terminal.</p>`;
+                container.innerHTML = `<p style="color: var(--text-muted); grid-column: 1/-1; font-size: 0.85rem; text-align: center; padding: 20px;">No hay máquinas registradas.</p>`;
                 return;
             }
             listToRender.forEach((m) => {
@@ -426,11 +495,45 @@
                 let connClass = m.is_online ? 'online' : 'offline';
                 let connText = m.is_online ? 'ONLINE' : 'OFFLINE';
 
+                // Simulación de índices mecánicos de 6 dígitos (ej: monedas acumuladas físicas + base)
+                let coinCounterVal = 100000 + (m.sales ? Math.floor(m.sales / 500) : 0);
+                let prizeCounterVal = 50000 + (m.prizes || 0);
+
+                let statsHtml = `
+                    <div class="stat-box"><span>CAJA FÍSICA (BOX)</span><b>$${m.box.toLocaleString()} CLP</b></div>
+                    <div class="stat-box"><span>CONTADOR MONEDAS</span>${formatMechanicalCounter(coinCounterVal)}</div>
+                    <div class="stat-box"><span>SEÑAL WI-FI</span><b>${m.wifi} dBm</b></div>
+                    <div class="stat-box"><span>VENTA DÍA (AUTO)</span><b>$${m.sales.toLocaleString()} CLP</b></div>
+                `;
+
+                // Si es Gerencia, mostramos también los premios y su contador mecánico exclusivo
+                if (currentRole === 'gerencia') {
+                    statsHtml += `
+                        <div class="stat-box"><span>PREMIOS (GERENCIA)</span><b>${m.prizes || 0} un.</b></div>
+                        <div class="stat-box"><span>CONTADOR PREMIOS</span>${formatMechanicalCounter(prizeCounterVal)}</div>
+                    `;
+                }
+
+                let actionsHtml = '';
+                if (currentRole === 'gerencia') {
+                    actionsHtml = `
+                        <button class="btn-sm btn-edit" onclick="openEditModal(${index})">✏️ Editar</button>
+                        <button class="btn-sm btn-pause" onclick="toggleMachine(${index})">${m.active ? 'Pausar' : 'Activar'}</button>
+                        <button class="btn-sm btn-danger" onclick="resetMachineBox(${index})">Vaciar Box (Retiro)</button>
+                        <button class="btn-sm btn-report" onclick="openMachineReport(${index})">📄 Informe</button>
+                        <button class="btn-sm btn-delete" onclick="deleteMachine(${index})">🗑️ Eliminar</button>
+                    `;
+                } else {
+                    actionsHtml = `
+                        <button class="btn-sm btn-report" onclick="openMachineReport(${index})">📄 Ver Mi Reporte</button>
+                    `;
+                }
+
                 boxDiv.innerHTML = `
                     <div class="machine-header-row">
                         <div>
                             <div class="machine-title">${m.name}</div>
-                            <div class="machine-mac">${m.mac}</div>
+                            <div class="machine-mac">${currentRole === 'gerencia' ? m.mac : 'Terminal Conectado'}</div>
                             <div class="machine-location">📍 ${m.location || 'Local por definir'}</div>
                         </div>
                         <div class="led-indicator">
@@ -439,17 +542,10 @@
                         </div>
                     </div>
                     <div class="machine-stats-grid">
-                        <div class="stat-box"><span>CAJA FÍSICA (BOX)</span><b>$${m.box.toLocaleString()} CLP</b></div>
-                        <div class="stat-box"><span>PREMIOS</span><b>${m.prizes || 0} un.</b></div>
-                        <div class="stat-box"><span>SEÑAL WI-FI</span><b>${m.wifi} dBm</b></div>
-                        <div class="stat-box"><span>VENTA DÍA (AUTO)</span><b>$${m.sales.toLocaleString()} CLP</b></div>
+                        ${statsHtml}
                     </div>
                     <div class="machine-footer-actions">
-                        <button class="btn-sm btn-edit" onclick="openEditModal(${index})">✏️ Editar</button>
-                        <button class="btn-sm btn-pause" onclick="toggleMachine(${index})">${m.active ? 'Pausar' : 'Activar'}</button>
-                        <button class="btn-sm btn-danger" onclick="resetMachineBox(${index})">Vaciar Box (Retiro)</button>
-                        <button class="btn-sm btn-report" onclick="openMachineReport(${index})">📄 Informe</button>
-                        <button class="btn-sm btn-delete" onclick="deleteMachine(${index})">🗑️ Eliminar</button>
+                        ${actionsHtml}
                     </div>
                 `;
                 container.appendChild(boxDiv);
@@ -613,10 +709,12 @@
             let logsHtml = '';
             if(m.dailyLogs && Object.keys(m.dailyLogs).length > 0) {
                 for(let date in m.dailyLogs) {
-                    logsHtml += `<tr><td>${date}</td><td>$${m.dailyLogs[date].sales.toLocaleString()} CLP</td><td>${m.dailyLogs[date].prizes} un.</td></tr>`;
+                    let prizeColClient = (currentRole === 'gerencia') ? `<td>${m.dailyLogs[date].prizes} un.</td>` : '';
+                    logsHtml += `<tr><td>${date}</td><td>$${m.dailyLogs[date].sales.toLocaleString()} CLP</td>${prizeColClient}</tr>`;
                 }
             } else {
-                logsHtml = `<tr><td colspan="3" style="text-align:center;">Registros diarios acumulándose automáticamente.</td></tr>`;
+                let colSpanVal = (currentRole === 'gerencia') ? 3 : 2;
+                logsHtml = `<tr><td colspan="${colSpanVal}" style="text-align:center;">Registros diarios acumulándose automáticamente.</td></tr>`;
             }
 
             let withdrawalsHtml = '';
@@ -628,21 +726,24 @@
                 withdrawalsHtml = `<tr><td colspan="4" style="text-align:center;">No hay retiros registrados en efectivo aún.</td></tr>`;
             }
 
+            let prizesHeaderTable = (currentRole === 'gerencia') ? `<th>Premios</th>` : '';
+            let prizesRowTable = (currentRole === 'gerencia') ? `<th>Fecha</th><th>Venta Diaria</th><th>Premios</th>` : `<th>Fecha</th><th>Venta Diaria</th>`;
+
             document.getElementById('report-content-body').innerHTML = `
                 <div style="margin-bottom: 12px; font-size: 0.8rem; line-height: 1.4;">
-                    <p><b>MAC:</b> <code>${m.mac}</code></p>
+                    ${currentRole === 'gerencia' ? `<p><b>MAC:</b> <code>${m.mac}</code></p>` : ''}
                     <p><b>Ubicación:</b> ${m.location || 'Local por definir'}</p>
-                    <p><b>Coordenadas GPS:</b> ${m.lat ? m.lat.toFixed(4) + ', ' + m.lng.toFixed(4) : 'No registradas'}</p>
                     <p><b>Estado Actual de Caja (Box):</b> $${m.box.toLocaleString()} CLP</p>
                 </div>
+                ${currentRole === 'gerencia' ? `
                 <p><b>💵 Historial de Retiros de Efectivo (Auditoría):</b></p>
                 <table class="letter-table" style="margin-top:5px; margin-bottom:15px;">
                     <thead><tr><th>Fecha y Hora</th><th>Responsable</th><th>Monto Retirado</th><th>Observación</th></tr></thead>
                     <tbody>${withdrawalsHtml}</tbody>
-                </table>
+                </table>` : ''}
                 <p><b>📅 Historial de Rendimiento Diario:</b></p>
                 <table class="letter-table" style="margin-top:5px;">
-                    <thead><tr><th>Fecha</th><th>Venta Diaria</th><th>Premios</th></tr></thead>
+                    <thead><tr>${prizesRowTable}</tr></thead>
                     <tbody>${logsHtml}</tbody>
                 </table>
             `;
@@ -650,6 +751,7 @@
         }
 
         function openGlobalReport() {
+            if (currentRole !== 'gerencia') return;
             document.getElementById('report-title').innerText = `INFORME MENSUAL OFICIAL - FLOTA WINWIN`;
             document.getElementById('report-date').innerText = `Emisión: ${new Date().toLocaleString()}`;
 
