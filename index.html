@@ -186,7 +186,7 @@
         <div class="header-actions" style="margin-top: 8px;">
             <button class="btn btn-secondary" id="role-toggle-btn" onclick="toggleUserRole()">👤 Rol: Gerencia (Admin)</button>
             <button class="btn" onclick="registerMachine()" id="btn-reg">+ Registrar MAC</button>
-            <button class="btn btn-purple" onclick="openGlobalReport()">📄 Informe Mensual / Flota</button>
+            <button class="btn btn-purple" onclick="openGlobalReport()" id="btn-global-report">📄 Informe Mensual / Flota</button>
             <button class="btn btn-danger" onclick="resetGlobalBox()" id="btn-vaciar-global" style="flex:unset;">Vaciar Caja Global</button>
         </div>
     </header>
@@ -295,14 +295,16 @@
                 <label><b>Contador Final Monedas (Lectura Cierre):</b></label>
                 <input type="number" id="modal-coin-final" placeholder="Ej: 100250">
             </div>
-            <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 15px 0;">
-            <div class="edit-group">
-                <label><b>Contador Inicial Premios (Inicio Periodo):</b></label>
-                <input type="number" id="modal-prize-init" placeholder="Ej: 50000">
-            </div>
-            <div class="edit-group">
-                <label><b>Contador Final Premios (Lectura Cierre):</b></label>
-                <input type="number" id="modal-prize-final" placeholder="Ej: 50040">
+            <div id="gerencia-counter-section">
+                <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 15px 0;">
+                <div class="edit-group">
+                    <label><b>Contador Inicial Premios (Inicio Periodo):</b></label>
+                    <input type="number" id="modal-prize-init" placeholder="Ej: 50000">
+                </div>
+                <div class="edit-group">
+                    <label><b>Contador Final Premios (Lectura Cierre):</b></label>
+                    <input type="number" id="modal-prize-final" placeholder="Ej: 50040">
+                </div>
             </div>
             <div class="edit-actions">
                 <button class="btn btn-secondary" onclick="saveCounters()">Guardar Contadores</button>
@@ -323,13 +325,13 @@
                 </svg>
                 <h1>INVERSIONES WIN WIN SpA</h1>
                 <span>R.U.T.: 78.498.679-9 | DEPARTAMENTO DE TELEMETRÍA Y FINANZAS</span>
-                <h2 id="report-title" style="margin-top: 10px; font-size: 1rem; color: #222;">REPORTE DE CIERRE Y BITÁCORA DIARIA</h2>
+                <h2 id="report-title" style="margin-top: 10px; font-size: 1rem; color: #222;">REPORTE DE CIERRE Y TRANSPARENCIA</h2>
                 <p id="report-date" style="margin-top: 3px; font-size: 0.75rem; color: #555;"></p>
             </div>
             <div id="report-content-body"></div>
             <div style="margin-top: 35px; display: flex; justify-content: space-between; text-align: center; font-size: 0.75rem;">
                 <div style="border-top: 1px solid #333; width: 150px; padding-top: 6px;">Firma Administrador</div>
-                <div style="border-top: 1px solid #333; width: 150px; padding-top: 6px;">Timbre y Sello</div>
+                <div style="border-top: 1px solid #333; width: 150px; padding-top: 6px;">Firma Locatario / Cliente</div>
             </div>
             <div style="text-align: center; margin-top: 20px;">
                 <button class="btn" onclick="window.print()" style="background: #000; color: #fff; padding: 8px 16px; font-size: 0.8rem;">Imprimir / Guardar PDF</button>
@@ -385,10 +387,11 @@
         function toggleUserRole() {
             if (currentRole === 'gerencia') {
                 currentRole = 'cliente';
-                document.getElementById('role-toggle-btn').innerText = "🔒 Rol: Cliente (Vista Local)";
+                document.getElementById('role-toggle-btn').innerText = "🔒 Rol: Cliente (Vista Locatario)";
                 document.getElementById('role-toggle-btn').style.background = "var(--accent-purple)";
                 document.getElementById('btn-reg').style.display = 'none';
                 document.getElementById('btn-vaciar-global').style.display = 'none';
+                document.getElementById('btn-global-report').style.display = 'none';
                 document.querySelectorAll('.gerencia-only').forEach(el => el.style.display = 'none');
             } else {
                 currentRole = 'gerencia';
@@ -396,6 +399,7 @@
                 document.getElementById('role-toggle-btn').style.background = "var(--accent-blue)";
                 document.getElementById('btn-reg').style.display = 'inline-block';
                 document.getElementById('btn-vaciar-global').style.display = 'inline-block';
+                document.getElementById('btn-global-report').style.display = 'inline-block';
                 document.querySelectorAll('.gerencia-only').forEach(el => el.style.display = '');
             }
             updateUI();
@@ -497,11 +501,12 @@
                     fillOpacity: 0.9
                 }).addTo(fleetMap);
 
-                let pManual = Math.max(0, (m.prizeFinal || 0) - (m.prizeInitial || 0));
-                let popupContent = `<b>${m.name}</b><br>📍 ${m.location || 'Sin local'}<br>Estado: <b>${statusText}</b><br>💰 Caja: $${(m.box||0).toLocaleString()} CLP`;
-                if (currentRole === 'gerencia') {
-                    popupContent += `<br>🎁 Premios (Manual): ${pManual} un.`;
-                }
+                let cInit = m.coinInitial || 100000;
+                let cFinal = m.coinFinal || cInit;
+                let cDelta = Math.max(0, cFinal - cInit);
+                let dineroRegistrado = cDelta * 500; // Asumiendo $500 por pulso/moneda
+
+                let popupContent = `<b>${m.name}</b><br>📍 ${m.location || 'Sin local'}<br>Estado: <b>${statusText}</b><br>💰 Dinero Registrado: $${dineroRegistrado.toLocaleString()} CLP`;
                 marker.bindPopup(popupContent);
                 fleetMarkers.push(marker);
             });
@@ -537,14 +542,11 @@
                 let connClass = m.is_online ? 'online' : 'offline';
                 let connText = m.is_online ? 'ONLINE' : 'OFFLINE';
 
-                // Cálculo manual independiente
+                // Cálculos contadores de monedas
                 let cInit = m.coinInitial || 100000;
                 let cFinal = m.coinFinal || (cInit + Math.floor((m.sales || 0) / 500));
                 let cDelta = Math.max(0, cFinal - cInit);
-
-                let pInit = m.prizeInitial || 50000;
-                let pFinal = m.prizeFinal || (pInit + (m.prizes || 0));
-                let pDelta = Math.max(0, pFinal - pInit);
+                let dineroRegistrado = cDelta * 500; // Contabilidad monetaria transparente
 
                 let statsHtml = `
                     <div class="stat-box telemetry-highlight">
@@ -552,13 +554,13 @@
                         <b style="color: #38bdf8; font-size: 1.2rem;">$${(m.sales || 0).toLocaleString()} CLP</b>
                     </div>
                     <div class="stat-box">
-                        <span>CAJA FÍSICA (BOX)</span>
-                        <b>$${(m.box || 0).toLocaleString()} CLP</b>
+                        <span>DINERO REGISTRADO (CONTADOR)</span>
+                        <b style="color: var(--accent-green); font-size: 1.2rem;">$${dineroRegistrado.toLocaleString()} CLP</b>
                     </div>
                     <div class="stat-box" style="grid-column: 1 / -1;">
                         <div class="counter-label-row">
                             <span>CONTADOR MONEDAS (INICIAL: ${cInit} ➔ FINAL: ${cFinal})</span>
-                            <span style="color: var(--accent-green); font-weight:bold;">Delta: ${cDelta} un.</span>
+                            <span style="color: var(--accent-green); font-weight:bold;">Total Entradas: ${cDelta} un.</span>
                         </div>
                         ${formatMechanicalCounter(cFinal)}
                     </div>
@@ -568,7 +570,12 @@
                     </div>
                 `;
 
+                // Si es Gerencia, mostramos también la sección de premios completa
                 if (currentRole === 'gerencia') {
+                    let pInit = m.prizeInitial || 50000;
+                    let pFinal = m.prizeFinal || (pInit + (m.prizes || 0));
+                    let pDelta = Math.max(0, pFinal - pInit);
+
                     statsHtml += `
                         <div class="stat-box telemetry-highlight">
                             <span>PREMIOS (TELEMETRÍA)</span>
@@ -596,7 +603,7 @@
                     `;
                 } else {
                     actionsHtml = `
-                        <button class="btn-sm btn-report" onclick="openMachineReport(${index})">📄 Ver Mi Reporte</button>
+                        <button class="btn-sm btn-report" onclick="openMachineReport(${index})">📄 Ver Informe Transparencia (Locatario)</button>
                     `;
                 }
 
@@ -604,7 +611,7 @@
                     <div class="machine-header-row">
                         <div>
                             <div class="machine-title">${m.name}</div>
-                            <div class="machine-mac">${currentRole === 'gerencia' ? m.mac : 'Terminal Conectado'}</div>
+                            <div class="machine-mac">${currentRole === 'gerencia' ? m.mac : 'Terminal Verificado'}</div>
                             <div class="machine-location">📍 ${m.location || 'Local por definir'}</div>
                         </div>
                         <div class="led-indicator">
@@ -629,8 +636,16 @@
             document.getElementById('counter-index').value = index;
             document.getElementById('modal-coin-init').value = m.coinInitial || 100000;
             document.getElementById('modal-coin-final').value = m.coinFinal || 100000;
-            document.getElementById('modal-prize-init').value = m.prizeInitial || 50000;
-            document.getElementById('modal-prize-final').value = m.prizeFinal || 50000;
+            
+            // Si es cliente, ocultamos campos de premios en el modal por seguridad
+            if (currentRole === 'cliente') {
+                document.getElementById('gerencia-counter-section').style.display = 'none';
+            } else {
+                document.getElementById('gerencia-counter-section').style.display = 'block';
+                document.getElementById('modal-prize-init').value = m.prizeInitial || 50000;
+                document.getElementById('modal-prize-final').value = m.prizeFinal || 50000;
+            }
+
             document.getElementById('counter-modal').style.display = 'flex';
         }
 
@@ -644,8 +659,11 @@
 
             m.coinInitial = parseInt(document.getElementById('modal-coin-init').value) || 0;
             m.coinFinal = parseInt(document.getElementById('modal-coin-final').value) || 0;
-            m.prizeInitial = parseInt(document.getElementById('modal-prize-init').value) || 0;
-            m.prizeFinal = parseInt(document.getElementById('modal-prize-final').value) || 0;
+            
+            if (currentRole === 'gerencia') {
+                m.prizeInitial = parseInt(document.getElementById('modal-prize-init').value) || 0;
+                m.prizeFinal = parseInt(document.getElementById('modal-prize-final').value) || 0;
+            }
 
             await saveStateAndSync();
             updateUI();
@@ -749,7 +767,6 @@
 
             let observacion = prompt("Ingresa alguna observación o novedad de la máquina (opcional):", "Sin novedad");
             let montoRetirado = m.box;
-            let premiosEntregados = Math.max(0, (m.prizeFinal || 0) - (m.prizeInitial || 0));
 
             if (!m.withdrawalHistory) m.withdrawalHistory = [];
 
@@ -757,7 +774,6 @@
                 date: new Date().toLocaleString(),
                 operator: operador,
                 amount: montoRetirado,
-                prizesCount: premiosEntregados,
                 note: observacion || "Sin observaciones"
             });
 
@@ -765,7 +781,7 @@
             await saveStateAndSync();
             updateUI();
 
-            alert(`✅ Retiro registrado por ${operador}\nMonto: $${montoRetirado.toLocaleString()} CLP\nPremios del ciclo: ${premiosEntregados} un.`);
+            alert(`✅ Retiro registrado por ${operador}\nMonto: $${montoRetirado.toLocaleString()} CLP`);
         }
 
         async function toggleMachine(index) {
@@ -806,34 +822,77 @@
 
         function openMachineReport(index) {
             const m = machines[index];
-            document.getElementById('report-title').innerText = `INFORME DETALLADO - ${m.name.toUpperCase()}`;
-            document.getElementById('report-date').innerText = `Emisión: ${new Date().toLocaleString()}`;
+            const cInit = m.coinInitial || 100000;
+            const cFinal = m.coinFinal || cInit;
+            const cDelta = Math.max(0, cFinal - cInit);
+            const dineroRegistrado = cDelta * 500;
 
-            let pManual = Math.max(0, (m.prizeFinal || 0) - (m.prizeInitial || 0));
+            if (currentRole === 'cliente') {
+                // INFORME LIMPIO Y TRANSPARENTE PARA EL LOCATARIO
+                document.getElementById('report-title').innerText = `REPORTE DE TRANSPARENCIA Y CONTABILIDAD - ${m.name.toUpperCase()}`;
+                document.getElementById('report-date').innerText = `Fecha de Emisión: ${new Date().toLocaleString()}`;
 
-            let withdrawalsHtml = '';
-            if(m.withdrawalHistory && m.withdrawalHistory.length > 0) {
-                m.withdrawalHistory.forEach(w => {
-                    withdrawalsHtml += `<tr><td>${w.date}</td><td><b>${w.operator}</b></td><td>$${w.amount.toLocaleString()} CLP</td><td>${w.note}</td></tr>`;
-                });
+                document.getElementById('report-content-body').innerHTML = `
+                    <div style="margin-bottom: 15px; font-size: 0.85rem; line-height: 1.5; background: #f8fafc; padding: 12px; border-radius: 6px; border: 1px solid #e2e8f0;">
+                        <p><b>Ubicación / Local:</b> ${m.location || 'Local Principal'}</p>
+                        <p><b>Estado del Terminal:</b> <span style="color: #10b981; font-weight:bold;">Operativo y Conectado</span></p>
+                    </div>
+                    <p style="font-weight: bold; margin-bottom: 6px; color: #1e293b;">📊 Auditoría de Entradas (Contador Mecánico de Monedas):</p>
+                    <table class="letter-table" style="margin-bottom: 15px;">
+                        <thead>
+                            <tr><th>Concepto</th><th>Lectura / Valor</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><b>Contador Inicial (Inicio Periodo)</b></td><td>${cInit} un.</td></tr>
+                            <tr><td><b>Contador Final (Cierre Actual)</b></td><td>${cFinal} un.</td></tr>
+                            <tr><td><b>Total Monedas Registradas (Delta)</b></td><td><b>${cDelta} un.</b></td></tr>
+                        </tbody>
+                    </table>
+                    <p style="font-weight: bold; margin-bottom: 6px; color: #1e293b;">💵 Contabilidad de Dinero Registrado:</p>
+                    <table class="letter-table">
+                        <thead>
+                            <tr><th>Descripción del Ingreso</th><th>Monto Total Calculado</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><b>Total Ingresado en la Máquina (${cDelta} monedas × $500)</b></td>
+                                <td style="font-size: 1.1rem; color: #059669; font-weight: bold;">$${dineroRegistrado.toLocaleString()} CLP</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p style="font-size: 0.75rem; color: #64748b; margin-top: 15px; text-align: center;">Este reporte certifica los registros mecánicos oficiales para la rendición transparente entre el locatario y Inversiones WinWin SpA.</p>
+                `;
             } else {
-                withdrawalsHtml = `<tr><td colspan="4" style="text-align:center;">No hay retiros registrados en efectivo aún.</td></tr>`;
+                // INFORME COMPLETO DE GERENCIA (ADMIN)
+                document.getElementById('report-title').innerText = `INFORME TÉCNICO Y FINANCIERO - ${m.name.toUpperCase()}`;
+                document.getElementById('report-date').innerText = `Emisión: ${new Date().toLocaleString()}`;
+
+                let pManual = Math.max(0, (m.prizeFinal || 0) - (m.prizeInitial || 0));
+                let withdrawalsHtml = '';
+                if(m.withdrawalHistory && m.withdrawalHistory.length > 0) {
+                    m.withdrawalHistory.forEach(w => {
+                        withdrawalsHtml += `<tr><td>${w.date}</td><td><b>${w.operator}</b></td><td>$${w.amount.toLocaleString()} CLP</td><td>${w.note}</td></tr>`;
+                    });
+                } else {
+                    withdrawalsHtml = `<tr><td colspan="4" style="text-align:center;">No hay retiros registrados en efectivo aún.</td></tr>`;
+                }
+
+                document.getElementById('report-content-body').innerHTML = `
+                    <div style="margin-bottom: 12px; font-size: 0.8rem; line-height: 1.4;">
+                        <p><b>MAC:</b> <code>${m.mac}</code></p>
+                        <p><b>Ubicación:</b> ${m.location || 'Local por definir'}</p>
+                        <p><b>Caja Física Actual (Box):</b> $${(m.box || 0).toLocaleString()} CLP</p>
+                        <p><b>Contador Monedas (Inicio ➔ Final):</b> ${cInit} ➔ ${cFinal} (Delta: ${cDelta} un. | $${dineroRegistrado.toLocaleString()} CLP)</p>
+                        <p><b>Total Premios Ciclo (Manual):</b> ${pManual} un.</p>
+                    </div>
+                    <p><b>💵 Historial de Retiros y Auditoría:</b></p>
+                    <table class="letter-table" style="margin-top:5px; margin-bottom:15px;">
+                        <thead><tr><th>Fecha y Hora</th><th>Responsable</th><th>Monto Retirado</th><th>Observación</th></tr></thead>
+                        <tbody>${withdrawalsHtml}</tbody>
+                    </table>
+                `;
             }
 
-            document.getElementById('report-content-body').innerHTML = `
-                <div style="margin-bottom: 12px; font-size: 0.8rem; line-height: 1.4;">
-                    ${currentRole === 'gerencia' ? `<p><b>MAC:</b> <code>${m.mac}</code></p>` : ''}
-                    <p><b>Ubicación:</b> ${m.location || 'Local por definir'}</p>
-                    <p><b>Estado Actual de Caja (Box):</b> $${(m.box || 0).toLocaleString()} CLP</p>
-                    ${currentRole === 'gerencia' ? `<p><b>Total Premios Ciclo (Manual Inicial/Final):</b> ${pManual} un.</p>` : ''}
-                </div>
-                ${currentRole === 'gerencia' ? `
-                <p><b>💵 Historial de Retiros de Efectivo y Auditoría:</b></p>
-                <table class="letter-table" style="margin-top:5px; margin-bottom:15px;">
-                    <thead><tr><th>Fecha y Hora</th><th>Responsable</th><th>Monto Retirado</th><th>Observación</th></tr></thead>
-                    <tbody>${withdrawalsHtml}</tbody>
-                </table>` : ''}
-            `;
             document.getElementById('print-modal').style.display = 'flex';
         }
 
@@ -851,7 +910,10 @@
             } else {
                 machines.forEach(m => {
                     let pMan = Math.max(0, (m.prizeFinal||0) - (m.prizeInitial||0));
-                    tableRows += `<tr><td><b>${m.name}</b><br><code style="font-size:0.65rem">${m.mac}</code></td><td>$${(m.box||0).toLocaleString()}</td><td>$${(m.sales||0).toLocaleString()}</td><td>${pMan} un.</td><td>${m.active ? 'Activa' : 'Pausada'}</td></tr>`;
+                    let cInit = m.coinInitial || 100000;
+                    let cFinal = m.coinFinal || cInit;
+                    let cDelta = Math.max(0, cFinal - cInit);
+                    tableRows += `<tr><td><b>${m.name}</b><br><code style="font-size:0.65rem">${m.mac}</code></td><td>$${(m.box||0).toLocaleString()}</td><td>$${(cDelta * 500).toLocaleString()}</td><td>${pMan} un.</td><td>${m.active ? 'Activa' : 'Pausada'}</td></tr>`;
                 });
             }
 
@@ -862,7 +924,7 @@
                     <p><b>Premios Totales Flota (Manuales):</b> ${totalPrizes} un.</p>
                 </div>
                 <table class="letter-table">
-                    <thead><tr><th>Máquina (MAC)</th><th>Caja Física Actual</th><th>Venta Hoy</th><th>Premios (Manual)</th><th>Estado</th></tr></thead>
+                    <thead><tr><th>Máquina (MAC)</th><th>Caja Física Actual</th><th>Venta Calculada (Contador)</th><th>Premios (Manual)</th><th>Estado</th></tr></thead>
                     <tbody>${tableRows}</tbody>
                 </table>
             `;
