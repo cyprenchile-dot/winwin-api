@@ -282,20 +282,28 @@
         </div>
     </div>
 
-    <!-- MODAL DE CONTADORES FÍSICOS (INICIAL / FINAL) -->
+    <!-- MODAL DE CONTADORES FÍSICOS (INICIAL / FINAL EDITABLES) -->
     <div id="counter-modal" class="modal-overlay">
         <div class="edit-box">
             <h2>🔢 Gestión de Contadores Físicos (Auditoría)</h2>
             <input type="hidden" id="counter-index">
             <div class="edit-group">
-                <label><b>Contador Inicial Monedas (Fijo Periodo):</b></label>
+                <label><b>Contador Inicial Monedas:</b></label>
                 <input type="number" id="modal-coin-init" placeholder="Ej: 3768">
+            </div>
+            <div class="edit-group">
+                <label><b>Contador Final Monedas:</b></label>
+                <input type="number" id="modal-coin-final" placeholder="Ej: 3790">
             </div>
             <div id="gerencia-counter-section">
                 <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 15px 0;">
                 <div class="edit-group">
-                    <label><b>Contador Inicial Premios (Inicio Periodo):</b></label>
+                    <label><b>Contador Inicial Premios:</b></label>
                     <input type="number" id="modal-prize-init" placeholder="Ej: 1164">
+                </div>
+                <div class="edit-group">
+                    <label><b>Contador Final Premios:</b></label>
+                    <input type="number" id="modal-prize-final" placeholder="Ej: 1180">
                 </div>
             </div>
             <div class="edit-actions">
@@ -497,8 +505,8 @@
 
                 let cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
                 let telemetryPulses = Math.floor((m.sales || 0) / 100);
-                let cFinal = cInit + telemetryPulses; // Correlativo perfecto
-                let cDelta = telemetryPulses;
+                let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
+                let cDelta = Math.max(0, cFinal - cInit);
                 let dineroRegistrado = cDelta * 100;
 
                 let popupContent = `<b>${m.name}</b><br>📍 ${m.location || 'Sin local'}<br>Estado: <b>${statusText}</b><br>💰 Dinero Registrado: $${dineroRegistrado.toLocaleString()} CLP`;
@@ -537,12 +545,12 @@
                 let connClass = m.is_online ? 'online' : 'offline';
                 let connText = m.is_online ? 'ONLINE' : 'OFFLINE';
 
-                // CORRELATIVO PERFECTO: C_Final = C_Init + Delta (Pulsos de telemetría)
+                // Cálculo correlativo perfecto: Inicial fijo + Base manual + Pulsos de telemetría en vivo
                 if (m.coinInitial === undefined) m.coinInitial = 3768;
                 let cInit = m.coinInitial;
                 let telemetryPulses = Math.floor((m.sales || 0) / 100);
-                let cFinal = cInit + telemetryPulses; // Ejemplo: 3776 + 1 = 3777
-                let cDelta = telemetryPulses;
+                let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
+                let cDelta = Math.max(0, cFinal - cInit);
                 let dineroRegistrado = cDelta * 100; 
 
                 let statsHtml = `
@@ -562,7 +570,7 @@
                         ${formatMechanicalCounter(cFinal)}
                     </div>
                     <div class="stat-box">
-                        <span>SEÑAL WI-VI</span>
+                        <span>SEÑAL WI-FI</span>
                         <b>${m.wifi || -50} dBm</b>
                     </div>
                 `;
@@ -572,7 +580,7 @@
                     if (m.prizeInitial === undefined) m.prizeInitial = 1164;
                     let pInit = m.prizeInitial;
                     let pDelta = m.prizes || 0;
-                    let pFinal = pInit + pDelta; // Correlativo perfecto para premios (Ej: 1164 + 0 = 1164)
+                    let pFinal = pInit + pDelta; // Correlativo perfecto para premios
 
                     statsHtml += `
                         <div class="stat-box telemetry-highlight">
@@ -628,7 +636,7 @@
             });
         }
 
-        // Modal de Contadores Físicos Inicial
+        // Modal de Contadores Físicos (Inicial y Final editables)
         function openCounterModal(index) {
             let m = machines[index];
             document.getElementById('counter-index').value = index;
@@ -636,12 +644,18 @@
             let cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
             document.getElementById('modal-coin-init').value = cInit;
             
+            let telemetryPulses = Math.floor((m.sales || 0) / 100);
+            let cFinalCurrent = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
+            document.getElementById('modal-coin-final').value = cFinalCurrent;
+            
             if (currentRole === 'cliente') {
                 document.getElementById('gerencia-counter-section').style.display = 'none';
             } else {
                 document.getElementById('gerencia-counter-section').style.display = 'block';
                 let pInit = m.prizeInitial !== undefined ? m.prizeInitial : 1164;
                 document.getElementById('modal-prize-init').value = pInit;
+                let pFinalCurrent = pInit + (m.prizes || 0);
+                document.getElementById('modal-prize-final').value = pFinalCurrent;
             }
 
             document.getElementById('counter-modal').style.display = 'flex';
@@ -656,21 +670,37 @@
             let m = machines[index];
 
             let rawInit = document.getElementById('modal-coin-init').value;
+            let rawFinal = document.getElementById('modal-coin-final').value;
+
             if (rawInit !== "") {
                 m.coinInitial = parseInt(rawInit);
             }
             
+            let telemetryPulses = Math.floor((m.sales || 0) / 100);
+            if (rawFinal !== "") {
+                let desiredFinal = parseInt(rawFinal);
+                // Calculamos la base manual para que el final comience exactamente en el número ingresado por el usuario
+                m.coinManualBase = desiredFinal - telemetryPulses;
+            }
+            
             if (currentRole === 'gerencia') {
                 let rawPInit = document.getElementById('modal-prize-init').value;
+                let rawPFinal = document.getElementById('modal-prize-final').value;
+                
                 if (rawPInit !== "") {
                     m.prizeInitial = parseInt(rawPInit);
+                }
+                if (rawPFinal !== "") {
+                    let desiredPFinal = parseInt(rawPFinal);
+                    let pInit = m.prizeInitial !== undefined ? m.prizeInitial : 1164;
+                    m.prizes = Math.max(0, desiredPFinal - pInit);
                 }
             }
 
             await saveStateAndSync();
             updateUI();
             closeCounterModal();
-            alert("✅ Contador inicial actualizado con éxito.");
+            alert("✅ Contadores físicos (inicial y final) actualizados con éxito.");
         }
 
         function filterMachines() {
@@ -747,8 +777,8 @@
                 machines.forEach(m => {
                     let cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
                     let telemetryPulses = Math.floor((m.sales || 0) / 100);
-                    let cFinal = cInit + telemetryPulses;
-                    let cDelta = telemetryPulses;
+                    let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
+                    let cDelta = Math.max(0, cFinal - cInit);
                     let dineroRecaudado = cDelta * 100;
 
                     if (cDelta > 0 || m.box > 0) {
@@ -763,8 +793,9 @@
                             note: observacion + " (Global)"
                         });
 
-                        // Cierre consolidado correlativo: el final actual pasa a ser el nuevo inicial
+                        // Cierre consolidado correlativo: el final actual pasa a ser el nuevo inicial y se resetea la base manual
                         m.coinInitial = cFinal;
+                        m.coinManualBase = undefined;
                         m.sales = 0;
                         m.box = 0;
                         m.prizes = 0;
@@ -783,8 +814,8 @@
 
             let cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
             let telemetryPulses = Math.floor((m.sales || 0) / 100);
-            let cFinal = cInit + telemetryPulses;
-            let cDelta = telemetryPulses;
+            let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
+            let cDelta = Math.max(0, cFinal - cInit);
             let dineroRecaudado = cDelta * 100;
 
             let observacion = prompt("Ingresa alguna observación o novedad del cierre (opcional):", "Cierre de turno OK");
@@ -801,8 +832,9 @@
                 note: observacion || "Sin observaciones"
             });
 
-            // Cierre consolidado correlativo: fijamos el contador final como el nuevo inicial
+            // Cierre consolidado profesional: fijamos el contador final como el nuevo inicial y reseteamos base
             m.coinInitial = cFinal;
+            m.coinManualBase = undefined;
             m.sales = 0;
             m.box = 0;
             m.prizes = 0;
@@ -863,8 +895,8 @@
             } else {
                 cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
                 let telemetryPulses = Math.floor((m.sales || 0) / 100);
-                cFinal = cInit + telemetryPulses;
-                cDelta = telemetryPulses;
+                cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
+                cDelta = Math.max(0, cFinal - cInit);
                 dineroRegistrado = cDelta * 100;
             }
 
@@ -959,8 +991,8 @@
 
                     let cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
                     let telemetryPulses = Math.floor((m.sales || 0) / 100);
-                    let cFinal = cInit + telemetryPulses;
-                    let cDelta = telemetryPulses;
+                    let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
+                    let cDelta = Math.max(0, cFinal - cInit);
                     let recMachine = cDelta * 100;
                     totalRecaudado += recMachine;
                     tableRows += `<tr><td><b>${m.name}</b><br><code style="font-size:0.65rem">${m.mac}</code></td><td>${cInit} ➔ ${cFinal}</td><td>$${recMachine.toLocaleString()}</td><td>${pDelta} un.</td><td>${m.active ? 'Activa' : 'Pausada'}</td></tr>`;
