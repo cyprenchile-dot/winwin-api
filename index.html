@@ -679,7 +679,6 @@
             let telemetryPulses = Math.floor((m.sales || 0) / 100);
             if (rawFinal !== "") {
                 let desiredFinal = parseInt(rawFinal);
-                // Calculamos la base manual para que el final comience exactamente en el número ingresado por el usuario
                 m.coinManualBase = desiredFinal - telemetryPulses;
             }
             
