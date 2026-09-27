@@ -460,8 +460,8 @@
             }
         }
 
-        // Generador de sonido metálico de moneda a máxima potencia
-        function playCoinSound() {
+        // Generador de sonido realista de moneda cayendo en caja (Cada 100 CLP)
+        function playCoinDropSound() {
             if (!soundEnabled) return;
             try {
                 const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -471,27 +471,26 @@
                     audioCtx.resume();
                 }
 
-                // Impacto metálico de alta potencia (3 tonos simultáneos para simular caída y resonancia)
-                const frequencies = [2093, 2793, 3135]; // Notas agudas metálicas (Do6, Fa6, Sol#6)
-                frequencies.forEach((freq, index) => {
-                    let osc = audioCtx.createOscillator();
-                    let gain = audioCtx.createGain();
-                    
-                    osc.type = 'sine';
-                    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-                    
-                    // Volumen máximo de salida (0.8 = Alta potencia)
-                    gain.gain.setValueAtTime(0.8, audioCtx.currentTime);
-                    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.35);
-                    
-                    osc.connect(gain);
-                    gain.connect(audioCtx.destination);
-                    
-                    osc.start(audioCtx.currentTime + (index * 0.02));
-                    osc.stop(audioCtx.currentTime + 0.4);
-                });
+                const now = audioCtx.currentTime;
+                
+                // Impacto metálico nítido (Tono de moneda cayendo)
+                let osc = audioCtx.createOscillator();
+                let gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(2793.83, now); // F6
+                osc.frequency.exponentialRampToValueAtTime(1396.91, now + 0.1);
+                
+                gain.gain.setValueAtTime(0.85, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+                
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                
+                osc.start(now);
+                osc.stop(now + 0.2);
+
             } catch(e) {
-                console.log("Audio no disponible o bloqueado por el navegador", e);
+                console.log("Audio bloqueado o no disponible", e);
             }
         }
 
@@ -519,7 +518,8 @@
             }
         }
 
-        async function logAuditEvent(action, machineName, operator, details) {
+        // Registro síncrono local instantáneo + guardado en segundo plano
+        function logAuditEvent(action, machineName, operator, details) {
             let event = {
                 timestamp: new Date().toLocaleString(),
                 operator: operator || (currentRole === 'gerencia' ? 'Gerencia (Admin)' : 'Locatario'),
@@ -531,7 +531,7 @@
             if (auditLogs.length > 400) auditLogs.pop();
             renderAuditLog();
             saveToLocalStorage();
-            await saveStateAndSync();
+            saveStateAndSync(); // Ejecuta red en segundo plano sin bloquear interfaz
         }
 
         function renderAuditLog() {
@@ -617,17 +617,13 @@
             return html;
         }
 
-        async function saveStateAndSync() {
+        function saveStateAndSync() {
             saveToLocalStorage();
-            try {
-                await fetch('https://winwin-api-v2.onrender.com/api/sync-fleet', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ machines: machines, dailyLedger: dailyLedger, auditLogs: auditLogs })
-                });
-            } catch (e) {
-                console.log("Error al sincronizar con la nube", e);
-            }
+            fetch('https://winwin-api-v2.onrender.com/api/sync-fleet', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ machines: machines, dailyLedger: dailyLedger, auditLogs: auditLogs })
+            }).catch(e => console.log("Sincronización en segundo plano pendiente", e));
         }
 
         async function fetchTelemetry() {
@@ -662,9 +658,13 @@
                 let prevSales = previousSalesState[m.mac] || 0;
                 let currentSales = m.sales || 0;
                 
-                // Si aumentaron las ventas (ingresó dinero nuevo), reproducir sonido metálico de moneda a máxima potencia
+                // Reproduce el sonido de una moneda cayendo exactamente por cada bloque de 100 CLP ingresados
                 if (currentSales > prevSales) {
-                    playCoinSound();
+                    let diff = currentSales - prevSales;
+                    let coinsCount = Math.floor(diff / 100); 
+                    for (let i = 0; i < coinsCount; i++) {
+                        setTimeout(() => playCoinDropSound(), i * 180); 
+                    }
                 }
                 previousSalesState[m.mac] = currentSales;
 
@@ -876,7 +876,7 @@
             document.getElementById('counter-modal').style.display = 'none';
         }
 
-        async function saveCounters() {
+        function saveCounters() {
             let index = document.getElementById('counter-index').value;
             let m = machines[index];
 
@@ -911,9 +911,8 @@
                 prizeChangesStr = ` | Premios Ini: ${m.prizeInitial}, Premios Fin: ${rawPFinalNum}`;
             }
 
-            await logAuditEvent("ACTUALIZACIÓN DE CONTADORES", m.name, null, `Monedas Ini: ${m.coinInitial}, Monedas Fin: ${rawFinalNum}${prizeChangesStr}`);
+            logAuditEvent("ACTUALIZACIÓN DE CONTADORES", m.name, null, `Monedas Ini: ${m.coinInitial}, Monedas Fin: ${rawFinalNum}${prizeChangesStr}`);
 
-            await saveStateAndSync();
             updateUI();
             closeCounterModal();
             alert("✅ Contadores físicos actualizados con éxito y registrados en la bitácora.");
@@ -968,7 +967,7 @@
             document.getElementById('edit-modal').style.display = 'none';
         }
 
-        async function saveEditedMachine() {
+        function saveEditedMachine() {
             let index = document.getElementById('edit-index').value;
             let m = machines[index];
 
@@ -978,15 +977,14 @@
             m.lat = selectedLat;
             m.lng = selectedLng;
 
-            await logAuditEvent("EDICIÓN DE TERMINAL", m.name, null, `Nombre cambiado de "${oldName}" a "${m.name}". Local: ${m.location}`);
+            logAuditEvent("EDICIÓN DE TERMINAL", m.name, null, `Nombre cambiado de "${oldName}" a "${m.name}". Local: ${m.location}`);
 
-            await saveStateAndSync();
             updateUI();
             closeEditModal();
             alert("¡Información, ubicación y pin del mapa guardados con éxito!");
         }
 
-        async function resetGlobalBox() {
+        function resetGlobalBox() {
             let operador = prompt("Arqueo global. Ingresa quién realiza el retiro (ej: Daniel):", "Daniel");
             if (!operador) return;
             let observacion = prompt("Ingresa alguna observación general del retiro global:", "Retiro general de flota");
@@ -1029,15 +1027,14 @@
                     }
                 });
 
-                await logAuditEvent("CIERRE DE CAJA GLOBAL", "Toda la Flota", operador, `Monto total retirado: $${totalGlobalRecaudado.toLocaleString()} CLP. Obs: ${observacion}`);
+                logAuditEvent("CIERRE DE CAJA GLOBAL", "Toda la Flota", operador, `Monto total retirado: $${totalGlobalRecaudado.toLocaleString()} CLP. Obs: ${observacion}`);
 
-                await saveStateAndSync();
                 updateUI();
                 alert(`¡Retiro y cierre global registrado con éxito por ${operador}! Contadores iniciales actualizados.`);
             }
         }
 
-        async function resetMachineBox(index) {
+        function resetMachineBox(index) {
             let m = machines[index];
             let operador = prompt(`Cierre de caja para "${m.name}". Ingresa quién realiza el retiro:`, "Daniel");
             if (!operador) return; 
@@ -1074,35 +1071,32 @@
             m.sales = 0;
             m.box = 0;
 
-            await logAuditEvent("CIERRE DE CAJA INDIVIDUAL", m.name, operador, `Recaudado: $${dineroRegistrado.toLocaleString()} CLP (${cDelta} monedas). Premios: ${pDelta} un. Obs: ${observacion}`);
+            logAuditEvent("CIERRE DE CAJA INDIVIDUAL", m.name, operador, `Recaudado: $${dineroRecaudado.toLocaleString()} CLP (${cDelta} monedas). Premios: ${pDelta} un. Obs: ${observacion}`);
 
-            await saveStateAndSync();
             updateUI();
 
-            alert(`✅ Cierre registrado por ${operador}\nMonto recaudado: $${dineroRegistrado.toLocaleString()} CLP (${cDelta} monedas)\nPremios entregados: ${pDelta} un.\nNuevos Contadores Iniciales fijados.`);
+            alert(`✅ Cierre registrado por ${operador}\nMonto recaudado: $${dineroRecaudado.toLocaleString()} CLP (${cDelta} monedas)\nPremios entregados: ${pDelta} un.\nNuevos Contadores Iniciales fijados.`);
         }
 
-        async function toggleMachine(index) {
+        function toggleMachine(index) {
             machines[index].active = !machines[index].active;
             let statusStr = machines[index].active ? "Activada" : "Pausada";
-            await logAuditEvent("CAMBIO DE ESTADO", machines[index].name, null, `Máquina ${statusStr}`);
+            logAuditEvent("CAMBIO DE ESTADO", machines[index].name, null, `Máquina ${statusStr}`);
 
-            await saveStateAndSync();
             updateUI();
         }
 
-        async function deleteMachine(index) {
+        function deleteMachine(index) {
             let mName = machines[index].name;
             if(confirm(`¿Estás seguro de eliminar permanentemente la máquina "${mName}"?`)) {
                 machines.splice(index, 1);
-                await logAuditEvent("ELIMINACIÓN DE TERMINAL", mName, null, "Terminal eliminado de la flota");
+                logAuditEvent("ELIMINACIÓN DE TERMINAL", mName, null, "Terminal eliminado de la flota");
 
-                await saveStateAndSync();
                 updateUI();
             }
         }
 
-        async function registerMachine() {
+        function registerMachine() {
             let macInput = prompt("Ingresa la MAC del ESP32 (ej: 24:6F:28:...):");
             if(macInput) {
                 let nameInput = prompt("Nombre o ubicación (ej: Peluchera Local 1):");
@@ -1122,15 +1116,14 @@
                     dailyLogs: {}, withdrawalHistory: [] 
                 });
 
-                await logAuditEvent("REGISTRO NUEVA MÁQUINA", newMachineName, null, `MAC registrada: ${macInput} en ${locInput}`);
+                logAuditEvent("REGISTRO NUEVA MÁQUINA", newMachineName, null, `MAC registrada: ${macInput} en ${locInput}`);
 
-                await saveStateAndSync();
                 updateUI();
                 alert("¡Máquina registrada con éxito!");
             }
         }
 
-        async function openMachineReport(index) {
+        function openMachineReport(index) {
             const m = machines[index];
             
             let lastClosure = (m.withdrawalHistory && m.withdrawalHistory.length > 0 && m.sales === 0) ? m.withdrawalHistory[0] : null;
@@ -1216,12 +1209,12 @@
                 `;
             }
 
-            await logAuditEvent("GENERACIÓN DE INFORME", m.name, null, `Informe tipo: ${currentRole === 'gerencia' ? 'Gerencia (Técnico/Financiero)' : 'Locatario (Transparencia)'}`);
+            logAuditEvent("GENERACIÓN DE INFORME", m.name, null, `Informe tipo: ${currentRole === 'gerencia' ? 'Gerencia (Técnico/Financiero)' : 'Locatario (Transparencia)'}`);
 
             document.getElementById('print-modal').style.display = 'flex';
         }
 
-        async function openGlobalReport() {
+        function openGlobalReport() {
             if (currentRole !== 'gerencia') return;
             document.getElementById('report-title').innerText = `INFORME MENSUAL OFICIAL - FLOTA WINWIN`;
             document.getElementById('report-date').innerText = `Emisión: ${new Date().toLocaleString()}`;
@@ -1260,7 +1253,7 @@
                 </table>
             `;
 
-            await logAuditEvent("INFORME GLOBAL FLOTA", "Toda la Flota", null, `Informe mensual de gerencia generado. Recaudación total: $${totalRecaudado.toLocaleString()} CLP`);
+            logAuditEvent("INFORME GLOBAL FLOTA", "Toda la Flota", null, `Informe mensual de gerencia generado. Recaudación total: $${totalRecaudado.toLocaleString()} CLP`);
 
             document.getElementById('print-modal').style.display = 'flex';
         }
