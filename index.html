@@ -460,7 +460,7 @@
             }
         }
 
-        // Generador de sonido realista de moneda cayendo en caja (Cada 100 CLP)
+        // Sonido realista de moneda real cayendo al monedero (Efecto acústico multicapa)
         function playCoinDropSound() {
             if (!soundEnabled) return;
             try {
@@ -473,20 +473,45 @@
 
                 const now = audioCtx.currentTime;
                 
-                let osc = audioCtx.createOscillator();
-                let gain = audioCtx.createGain();
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(2793.83, now); // F6
-                osc.frequency.exponentialRampToValueAtTime(1396.91, now + 0.1);
-                
-                gain.gain.setValueAtTime(0.85, now);
-                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
-                
-                osc.connect(gain);
-                gain.connect(audioCtx.destination);
-                
-                osc.start(now);
-                osc.stop(now + 0.2);
+                // 1. Impacto metálico inicial agudo (al entrar por la ranura)
+                let osc1 = audioCtx.createOscillator();
+                let gain1 = audioCtx.createGain();
+                osc1.type = 'sine';
+                osc1.frequency.setValueAtTime(3520, now); // A7
+                osc1.frequency.exponentialRampToValueAtTime(1760, now + 0.05);
+                gain1.gain.setValueAtTime(0.7, now);
+                gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+                osc1.connect(gain1);
+                gain1.connect(audioCtx.destination);
+                osc1.start(now);
+                osc1.stop(now + 0.08);
+
+                // 2. Carrerilla / rebote rápido dentro del monedero metálico
+                [0.03, 0.06, 0.09].forEach((delay, i) => {
+                    let oscR = audioCtx.createOscillator();
+                    let gainR = audioCtx.createGain();
+                    oscR.type = 'triangle';
+                    oscR.frequency.setValueAtTime(2200 - (i * 400), now + delay);
+                    gainR.gain.setValueAtTime(0.3, now + delay);
+                    gainR.gain.exponentialRampToValueAtTime(0.001, now + delay + 0.04);
+                    oscR.connect(gainR);
+                    gainR.connect(audioCtx.destination);
+                    oscR.start(now + delay);
+                    oscR.stop(now + delay + 0.04);
+                });
+
+                // 3. Golpe seco final al caer a la caja de dinero
+                let oscDrop = audioCtx.createOscillator();
+                let gainDrop = audioCtx.createGain();
+                oscDrop.type = 'sine';
+                oscDrop.frequency.setValueAtTime(320, now + 0.12);
+                oscDrop.frequency.exponentialRampToValueAtTime(120, now + 0.25);
+                gainDrop.gain.setValueAtTime(0.9, now + 0.12);
+                gainDrop.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+                oscDrop.connect(gainDrop);
+                gainDrop.connect(audioCtx.destination);
+                oscDrop.start(now + 0.12);
+                oscDrop.stop(now + 0.28);
 
             } catch(e) {
                 console.log("Audio bloqueado o no disponible", e);
@@ -657,11 +682,12 @@
                 let prevSales = previousSalesState[m.mac] || 0;
                 let currentSales = m.sales || 0;
                 
+                // Reproduce el sonido de una moneda real cayendo al monedero exactamente por cada bloque de 100 CLP
                 if (currentSales > prevSales) {
                     let diff = currentSales - prevSales;
                     let coinsCount = Math.floor(diff / 100); 
                     for (let i = 0; i < coinsCount; i++) {
-                        setTimeout(() => playCoinDropSound(), i * 180); 
+                        setTimeout(() => playCoinDropSound(), i * 220); 
                     }
                 }
                 previousSalesState[m.mac] = currentSales;
@@ -845,7 +871,7 @@
             });
         }
 
-        // Modal de Contadores Físicos con validación de índice segura
+        // Modal de Contadores Físicos con validación segura
         function openCounterModal(index) {
             if (index === undefined || index < 0 || !machines[index]) return;
             let m = machines[index];
