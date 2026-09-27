@@ -206,7 +206,7 @@
             .letter-page { box-shadow: none; margin: 0; width: 100%; padding: 1cm; }
         }
     </style>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body>
 
@@ -218,6 +218,7 @@
         <div class="status-badge" id="server-status">ONLINE</div>
         <div class="header-actions" style="margin-top: 8px;">
             <button class="btn btn-secondary" id="role-toggle-btn" onclick="toggleUserRole()">👤 Rol: Gerencia (Admin)</button>
+            <button class="btn btn-secondary" id="sound-toggle-btn" onclick="toggleSound()" style="background: var(--accent-green);">🔊 Sonido Monedas: ON</button>
             <button class="btn" onclick="registerMachine()" id="btn-reg">+ Registrar MAC</button>
             <button class="btn btn-purple" onclick="openGlobalReport()" id="btn-global-report">📄 Informe Mensual / Flota</button>
             <button class="btn btn-danger" onclick="resetGlobalBox()" id="btn-vaciar-global" style="flex:unset;">Vaciar Caja Global</button>
@@ -397,6 +398,7 @@
 
     <script>
         let currentRole = 'gerencia';
+        let soundEnabled = true;
 
         const ctx = document.getElementById('salesChart').getContext('2d');
         const salesChart = new Chart(ctx, {
@@ -427,7 +429,7 @@
         let machines = [];
         let dailyLedger = [];
         let auditLogs = []; 
-        let previousSalesState = {}; // Control para reproducir sonido de moneda al aumentar ventas
+        let previousSalesState = {}; 
         let fleetMap = null;
         let fleetMarkers = [];
         let editMap = null;
@@ -445,23 +447,51 @@
             fetchTelemetry();
         });
 
-        // Generador de sonido de moneda (Ding metálico web nativo)
+        // Botón de encendido / apagado de sonido
+        function toggleSound() {
+            soundEnabled = !soundEnabled;
+            let btn = document.getElementById('sound-toggle-btn');
+            if (soundEnabled) {
+                btn.innerText = "🔊 Sonido Monedas: ON";
+                btn.style.background = "var(--accent-green)";
+            } else {
+                btn.innerText = "🔇 Sonido Monedas: OFF";
+                btn.style.background = "var(--accent-red)";
+            }
+        }
+
+        // Generador de sonido metálico de moneda a máxima potencia
         function playCoinSound() {
+            if (!soundEnabled) return;
             try {
-                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                const osc = audioCtx.createOscillator();
-                const gain = audioCtx.createGain();
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(988, audioCtx.currentTime); // Nota B5
-                osc.frequency.exponentialRampToValueAtTime(1318, audioCtx.currentTime + 0.08); // Nota E6
-                gain.gain.setValueAtTime(0.25, audioCtx.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.25);
-                osc.connect(gain);
-                gain.connect(audioCtx.destination);
-                osc.start();
-                osc.stop(audioCtx.currentTime + 0.25);
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                const audioCtx = new AudioContext();
+                
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+
+                // Impacto metálico de alta potencia (3 tonos simultáneos para simular caída y resonancia)
+                const frequencies = [2093, 2793, 3135]; // Notas agudas metálicas (Do6, Fa6, Sol#6)
+                frequencies.forEach((freq, index) => {
+                    let osc = audioCtx.createOscillator();
+                    let gain = audioCtx.createGain();
+                    
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+                    
+                    // Volumen máximo de salida (0.8 = Alta potencia)
+                    gain.gain.setValueAtTime(0.8, audioCtx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.35);
+                    
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    
+                    osc.start(audioCtx.currentTime + (index * 0.02));
+                    osc.stop(audioCtx.currentTime + 0.4);
+                });
             } catch(e) {
-                // Audio bloqueado hasta interacción del usuario
+                console.log("Audio no disponible o bloqueado por el navegador", e);
             }
         }
 
@@ -632,7 +662,7 @@
                 let prevSales = previousSalesState[m.mac] || 0;
                 let currentSales = m.sales || 0;
                 
-                // Si aumentaron las ventas (entró dinero nuevo), reproducir sonido de moneda
+                // Si aumentaron las ventas (ingresó dinero nuevo), reproducir sonido metálico de moneda a máxima potencia
                 if (currentSales > prevSales) {
                     playCoinSound();
                 }
