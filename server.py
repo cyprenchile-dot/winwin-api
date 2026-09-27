@@ -6,7 +6,8 @@ import os
 app = Flask(__name__)
 CORS(app)
 
-DATABASE_FILE = 'fleet_database.json'
+# Ruta actualizada apuntando al disco persistente en Render
+DATABASE_FILE = '/var/data/fleet_database.json'
 
 def load_data():
     if os.path.exists(DATABASE_FILE):
