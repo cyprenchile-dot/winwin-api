@@ -87,7 +87,7 @@
             text-shadow: 0 0 5px rgba(56, 189, 248, 0.4);
         }
 
-        /* ESTILOS WIFE VISUAL GRADUAL */
+        /* ESTILOS WIFI VISUAL GRADUAL */
         .wifi-visual-container {
             display: flex;
             flex-direction: column;
@@ -112,10 +112,6 @@
             background: rgba(255,255,255,0.15);
             transition: 0.3s;
         }
-        .wifi-bar:nth-child(1) { height: 4px; }
-        .wifi-bar:nth-child(2) { height: 7px; }
-        .wifi-bar:nth-child(3) { height: 10px; }
-        .wifi-bar:nth-child(4) { height: 14px; }
 
         /* SECCIÓN DE MÁQUINAS */
         .machines-section { margin-bottom: 15px; }
@@ -152,7 +148,6 @@
         .btn-report { background: var(--accent-purple); color: white; }
         .btn-counter { background: #f59e0b; color: #000; }
         .btn-delete { background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); }
-        .btn-delete:hover { background: #ef4444; color: white; }
 
         /* MAPA GENERAL DE LA FLOTA */
         .fleet-map-card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 15px; display: flex; flex-direction: column; margin-bottom: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
@@ -169,7 +164,6 @@
 
         .calendar-ledger { flex-grow: 1; overflow-y: auto; font-size: 0.75rem; border: 1px solid var(--border-color); border-radius: 6px; background: rgba(0,0,0,0.2); padding: 8px; }
         .ledger-row { display: flex; justify-content: space-between; padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.05); }
-        .ledger-row:last-child { border-bottom: none; }
 
         /* MODALES */
         .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 1100; justify-content: center; align-items: center; padding: 15px; }
@@ -187,4 +181,95 @@
         .letter-header { text-align: center; border-bottom: 2px solid #222; padding-bottom: 12px; margin-bottom: 15px; }
         .letter-header h1 { font-size: 1.2rem; color: #111; font-weight: 800; }
         .letter-header span { font-size: 0.75rem; color: #555; font-weight: 700; display: block; margin-top: 3px; }
-        .letter-table { width: 100%; border-collapse: collapse; margin
+        .letter-table { width: 100%; border-collapse: collapse; margin-top: 10px; margin-bottom: 20px; font-size: 0.8rem; }
+        .letter-table th, .letter-table td { border: 1px solid #ccc; padding: 7px 10px; text-align: left; }
+        .letter-table th { background: #f1f5f9; color: #000; font-weight: 700; }
+        .close-modal-btn { position: absolute; top: 15px; right: 15px; background: #ef4444; color: white; border: none; padding: 6px 12px; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 0.75rem; }
+
+        @media print {
+            body * { visibility: hidden; }
+            #print-modal, #print-modal * { visibility: visible; }
+            #print-modal { position: absolute; top: 0; left: 0; background: white; padding: 0; width: 100%; }
+            .close-modal-btn { display: none; }
+            .letter-page { box-shadow: none; margin: 0; width: 100%; padding: 1cm; }
+        }
+    </style>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</head>
+<body>
+
+    <header>
+        <div class="logo-area">
+            <h1>INVERSIONES WINWIN SPA</h1>
+            <span>TELEMETRÍA Y CONTROL PRO (Piero & Daniel)</span>
+        </div>
+        <div class="status-badge" id="server-status">ONLINE</div>
+        <div class="header-actions" style="margin-top: 8px;">
+            <button class="btn btn-secondary" id="role-toggle-btn" onclick="toggleUserRole()">👤 Rol: Gerencia (Admin)</button>
+            <button class="btn" onclick="registerMachine()" id="btn-reg">+ Registrar MAC</button>
+            <button class="btn btn-purple" onclick="openGlobalReport()" id="btn-global-report">📄 Informe Mensual / Flota</button>
+            <button class="btn btn-danger" onclick="resetGlobalBox()" id="btn-vaciar-global" style="flex:unset;">Vaciar Caja Global</button>
+        </div>
+    </header>
+
+    <div class="metrics-grid" id="metrics-grid-container">
+        <div class="card">
+            <h3>Terminales Activos</h3>
+            <div class="value" id="active-terminals">0</div>
+            <div class="subtext">Flota conectada</div>
+        </div>
+        <div class="card" style="border-left: 3px solid var(--accent-yellow);">
+            <h3>Venta Total Día</h3>
+            <div class="value" id="daily-sales">$0 CLP</div>
+            <div class="subtext">Automático 00:00 hrs</div>
+        </div>
+        <div class="card" style="border-left: 3px solid var(--accent-blue);">
+            <h3>Caja Global (Físico)</h3>
+            <div class="value" id="box-total">$0 CLP</div>
+            <div class="subtext">Acumulado hasta retiro</div>
+        </div>
+        <div class="card gerencia-only" style="border-left: 3px solid var(--accent-purple);">
+            <h3>Premios Totales Flota</h3>
+            <div class="value" id="total-prizes">0 un.</div>
+            <div class="subtext">Registro Manual (Físico)</div>
+        </div>
+        <div class="card">
+            <h3>Señal Wi-Fi Promedio</h3>
+            <div class="value" id="wifi-signal">0 dBm</div>
+            <div class="subtext">Estabilidad</div>
+        </div>
+        <div class="card gerencia-only" style="border-left: 3px solid var(--accent-green);">
+            <h3>Eficiencia Flota</h3>
+            <div class="value" id="fleet-efficiency">0%</div>
+            <div class="subtext">Ratio venta/premio</div>
+        </div>
+    </div>
+
+    <div class="machines-section">
+        <div class="section-header">
+            <h2>MÁQUINAS EN TERRENO</h2>
+            <input type="text" id="searchInput" class="search-input" placeholder="🔍 Buscar nombre o MAC..." onkeyup="filterMachines()">
+        </div>
+        <div class="machines-grid" id="machines-container"></div>
+    </div>
+
+    <div class="fleet-map-card">
+        <h2>🌍 Ubicación de Flota en Terreno</h2>
+        <div id="dashboard-map"></div>
+    </div>
+
+    <div class="analytics-grid gerencia-only">
+        <div class="analytics-card">
+            <div class="analytics-header">
+                <h2>Tendencia de Venta Diaria</h2>
+            </div>
+            <div style="position: relative; flex-grow: 1;">
+                <canvas id="salesChart"></canvas>
+            </div>
+        </div>
+        <div class="analytics-card">
+            <div class="analytics-header">
+                <h2>📅 Bitácora Automática de Registros Diarios</h2>
+            </div>
+            <div class="calendar-ledger" id="ledger-container"></div>
+        </div>
