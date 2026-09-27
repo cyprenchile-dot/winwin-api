@@ -4,9 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Inversiones WinWin SpA - Telemetría Pro</title>
-    <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- Leaflet CSS para los Mapas -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         :root {
@@ -172,7 +170,6 @@
             .letter-page { box-shadow: none; margin: 0; width: 100%; padding: 1cm; }
         }
     </style>
-    <!-- Leaflet JS para los Mapas -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body>
@@ -191,7 +188,6 @@
         </div>
     </header>
 
-    <!-- CONTADORES DESTACADOS -->
     <div class="metrics-grid" id="metrics-grid-container">
         <div class="card">
             <h3>Terminales Activos</h3>
@@ -211,7 +207,7 @@
         <div class="card gerencia-only" style="border-left: 3px solid var(--accent-purple);">
             <h3>Premios Totales Flota</h3>
             <div class="value" id="total-prizes">0 un.</div>
-            <div class="subtext">Dispensador</div>
+            <div class="subtext">Registro Manual</div>
         </div>
         <div class="card">
             <h3>Señal Wi-Fi Promedio</h3>
@@ -225,7 +221,6 @@
         </div>
     </div>
 
-    <!-- MÁQUINAS EN TERRENO -->
     <div class="machines-section">
         <div class="section-header">
             <h2>MÁQUINAS EN TERRENO</h2>
@@ -234,13 +229,11 @@
         <div class="machines-grid" id="machines-container"></div>
     </div>
 
-    <!-- MAPA GENERAL DE LA FLOTA -->
     <div class="fleet-map-card">
         <h2>🌍 Ubicación de Flota en Terreno</h2>
         <div id="dashboard-map"></div>
     </div>
 
-    <!-- ANALYTICS -->
     <div class="analytics-grid gerencia-only">
         <div class="analytics-card">
             <div class="analytics-header">
@@ -258,7 +251,6 @@
         </div>
     </div>
 
-    <!-- MODAL DE EDICIÓN CON MAPA -->
     <div id="edit-modal" class="modal-overlay">
         <div class="edit-box">
             <h2>✏️ Editar Terminal y Ubicación GPS</h2>
@@ -282,7 +274,6 @@
         </div>
     </div>
 
-    <!-- MODAL DE CONTADORES FÍSICOS (INICIAL / FINAL EDITABLES) -->
     <div id="counter-modal" class="modal-overlay">
         <div class="edit-box">
             <h2>🔢 Gestión de Contadores Físicos (Auditoría)</h2>
@@ -298,11 +289,11 @@
             <div id="gerencia-counter-section">
                 <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 15px 0;">
                 <div class="edit-group">
-                    <label><b>Contador Inicial Premios:</b></label>
+                    <label><b>Contador Inicial Premios (Manual):</b></label>
                     <input type="number" id="modal-prize-init" placeholder="Ej: 1164">
                 </div>
                 <div class="edit-group">
-                    <label><b>Contador Final Premios:</b></label>
+                    <label><b>Contador Final Premios (Manual):</b></label>
                     <input type="number" id="modal-prize-final" placeholder="Ej: 1180">
                 </div>
             </div>
@@ -313,7 +304,6 @@
         </div>
     </div>
 
-    <!-- MODAL DE INFORME TAMAÑO CARTA -->
     <div id="print-modal" class="modal-overlay">
         <div class="letter-page">
             <button class="close-modal-btn" onclick="closeReport()">Cerrar</button>
@@ -545,7 +535,7 @@
                 let connClass = m.is_online ? 'online' : 'offline';
                 let connText = m.is_online ? 'ONLINE' : 'OFFLINE';
 
-                // Cálculo correlativo perfecto: Inicial fijo + Base manual + Pulsos de telemetría en vivo
+                // Cálculo correlativo monedas: Inicial fijo + Base manual + Pulsos de telemetría en vivo
                 if (m.coinInitial === undefined) m.coinInitial = 3768;
                 let cInit = m.coinInitial;
                 let telemetryPulses = Math.floor((m.sales || 0) / 100);
@@ -575,18 +565,14 @@
                     </div>
                 `;
 
-                // Si es Gerencia, mostramos también la sección de premios completa con correlativo
+                // Si es Gerencia, mostramos también la sección de premios manual
                 if (currentRole === 'gerencia') {
                     if (m.prizeInitial === undefined) m.prizeInitial = 1164;
                     let pInit = m.prizeInitial;
-                    let pDelta = m.prizes || 0;
-                    let pFinal = pInit + pDelta; // Correlativo perfecto para premios
+                    let pDelta = m.prizes || 0; // Gestionado de forma manual
+                    let pFinal = pInit + pDelta;
 
                     statsHtml += `
-                        <div class="stat-box telemetry-highlight">
-                            <span>PREMIOS (TELEMETRÍA)</span>
-                            <b style="color: #a855f7; font-size: 1.2rem;">${pDelta} un.</b>
-                        </div>
                         <div class="stat-box" style="grid-column: 1 / -1;">
                             <div class="counter-label-row">
                                 <span>CONTADOR PREMIOS MANUAL (INICIAL: ${pInit} ➔ FINAL: ${pFinal})</span>
@@ -645,377 +631,4 @@
             document.getElementById('modal-coin-init').value = cInit;
             
             let telemetryPulses = Math.floor((m.sales || 0) / 100);
-            let cFinalCurrent = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
-            document.getElementById('modal-coin-final').value = cFinalCurrent;
-            
-            if (currentRole === 'cliente') {
-                document.getElementById('gerencia-counter-section').style.display = 'none';
-            } else {
-                document.getElementById('gerencia-counter-section').style.display = 'block';
-                let pInit = m.prizeInitial !== undefined ? m.prizeInitial : 1164;
-                document.getElementById('modal-prize-init').value = pInit;
-                let pFinalCurrent = pInit + (m.prizes || 0);
-                document.getElementById('modal-prize-final').value = pFinalCurrent;
-            }
-
-            document.getElementById('counter-modal').style.display = 'flex';
-        }
-
-        function closeCounterModal() {
-            document.getElementById('counter-modal').style.display = 'none';
-        }
-
-        async function saveCounters() {
-            let index = document.getElementById('counter-index').value;
-            let m = machines[index];
-
-            let rawInit = document.getElementById('modal-coin-init').value;
-            let rawFinal = document.getElementById('modal-coin-final').value;
-
-            if (rawInit !== "") {
-                m.coinInitial = parseInt(rawInit);
-            }
-            
-            let telemetryPulses = Math.floor((m.sales || 0) / 100);
-            if (rawFinal !== "") {
-                let desiredFinal = parseInt(rawFinal);
-                m.coinManualBase = desiredFinal - telemetryPulses;
-            }
-            
-            if (currentRole === 'gerencia') {
-                let rawPInit = document.getElementById('modal-prize-init').value;
-                let rawPFinal = document.getElementById('modal-prize-final').value;
-                
-                if (rawPInit !== "") {
-                    m.prizeInitial = parseInt(rawPInit);
-                }
-                if (rawPFinal !== "") {
-                    let desiredPFinal = parseInt(rawPFinal);
-                    let pInit = m.prizeInitial !== undefined ? m.prizeInitial : 1164;
-                    m.prizes = Math.max(0, desiredPFinal - pInit);
-                }
-            }
-
-            await saveStateAndSync();
-            updateUI();
-            closeCounterModal();
-            alert("✅ Contadores físicos (inicial y final) actualizados con éxito.");
-        }
-
-        function filterMachines() {
-            let query = document.getElementById('searchInput').value.toLowerCase();
-            let filtered = machines.filter(m => m.name.toLowerCase().includes(query) || m.mac.toLowerCase().includes(query));
-            renderMachineBoxes(filtered);
-        }
-
-        function openEditModal(index) {
-            let m = machines[index];
-            document.getElementById('edit-index').value = index;
-            document.getElementById('edit-name').value = m.name || '';
-            document.getElementById('edit-location').value = m.location || '';
-
-            selectedLat = m.lat || -33.4489;
-            selectedLng = m.lng || -70.6693;
-
-            document.getElementById('edit-modal').style.display = 'flex';
-
-            setTimeout(() => {
-                if (!editMap) {
-                    editMap = L.map('edit-map').setView([selectedLat, selectedLng], 13);
-                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                        attribution: '&copy; OpenStreetMap contributors'
-                    }).addTo(editMap);
-
-                    editMarker = L.marker([selectedLat, selectedLng], { draggable: true }).addTo(editMap);
-
-                    editMarker.on('dragend', function (e) {
-                        let pos = editMarker.getLatLng();
-                        selectedLat = pos.lat;
-                        selectedLng = pos.lng;
-                    });
-
-                    editMap.on('click', function (e) {
-                        selectedLat = e.latlng.lat;
-                        selectedLng = e.latlng.lng;
-                        editMarker.setLatLng([selectedLat, selectedLng]);
-                    });
-                } else {
-                    editMap.invalidateSize();
-                    editMap.setView([selectedLat, selectedLng], 13);
-                    editMarker.setLatLng([selectedLat, selectedLng]);
-                }
-            }, 300);
-        }
-
-        function closeEditModal() {
-            document.getElementById('edit-modal').style.display = 'none';
-        }
-
-        async function saveEditedMachine() {
-            let index = document.getElementById('edit-index').value;
-            let m = machines[index];
-
-            m.name = document.getElementById('edit-name').value || 'Terminal Terreno';
-            m.location = document.getElementById('edit-location').value || 'Local por definir';
-            m.lat = selectedLat;
-            m.lng = selectedLng;
-
-            await saveStateAndSync();
-            updateUI();
-            closeEditModal();
-            alert("¡Información, ubicación y pin del mapa guardados con éxito!");
-        }
-
-        async function resetGlobalBox() {
-            let operador = prompt("Arqueo global. Ingresa quién realiza el retiro (ej: Daniel):", "Daniel");
-            if (!operador) return;
-            let observacion = prompt("Ingresa alguna observación general del retiro global:", "Retiro general de flota");
-
-            if(confirm("¿Realizar el arqueo y vaciar la caja global de efectivo de toda la flota?")) {
-                let fechaHora = new Date().toLocaleString();
-                machines.forEach(m => {
-                    let cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
-                    let telemetryPulses = Math.floor((m.sales || 0) / 100);
-                    let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
-                    let cDelta = Math.max(0, cFinal - cInit);
-                    let dineroRecaudado = cDelta * 100;
-
-                    if (cDelta > 0 || m.box > 0) {
-                        if (!m.withdrawalHistory) m.withdrawalHistory = [];
-                        m.withdrawalHistory.unshift({
-                            date: fechaHora,
-                            operator: operador,
-                            amount: dineroRecaudado > 0 ? dineroRecaudado : m.box,
-                            coinInit: cInit,
-                            coinFinal: cFinal,
-                            coinsDelta: cDelta,
-                            note: observacion + " (Global)"
-                        });
-
-                        // Cierre consolidado correlativo: el final actual pasa a ser el nuevo inicial y se resetea la base manual
-                        m.coinInitial = cFinal;
-                        m.coinManualBase = undefined;
-                        m.sales = 0;
-                        m.box = 0;
-                        m.prizes = 0;
-                    }
-                });
-                await saveStateAndSync();
-                updateUI();
-                alert(`¡Retiro y cierre global registrado con éxito por ${operador}! Contadores iniciales actualizados.`);
-            }
-        }
-
-        async function resetMachineBox(index) {
-            let m = machines[index];
-            let operador = prompt(`Cierre de caja para "${m.name}". Ingresa quién realiza el retiro:`, "Daniel");
-            if (!operador) return; 
-
-            let cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
-            let telemetryPulses = Math.floor((m.sales || 0) / 100);
-            let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
-            let cDelta = Math.max(0, cFinal - cInit);
-            let dineroRecaudado = cDelta * 100;
-
-            let observacion = prompt("Ingresa alguna observación o novedad del cierre (opcional):", "Cierre de turno OK");
-
-            if (!m.withdrawalHistory) m.withdrawalHistory = [];
-
-            m.withdrawalHistory.unshift({
-                date: new Date().toLocaleString(),
-                operator: operador,
-                amount: dineroRecaudado,
-                coinInit: cInit,
-                coinFinal: cFinal,
-                coinsDelta: cDelta,
-                note: observacion || "Sin observaciones"
-            });
-
-            // Cierre consolidado profesional: fijamos el contador final como el nuevo inicial y reseteamos base
-            m.coinInitial = cFinal;
-            m.coinManualBase = undefined;
-            m.sales = 0;
-            m.box = 0;
-            m.prizes = 0;
-
-            await saveStateAndSync();
-            updateUI();
-
-            alert(`✅ Cierre registrado por ${operador}\nMonto recaudado: $${dineroRecaudado.toLocaleString()} CLP (${cDelta} monedas)\nNuevo Contador Inicial fijado en: ${cFinal}`);
-        }
-
-        async function toggleMachine(index) {
-            machines[index].active = !machines[index].active;
-            await saveStateAndSync();
-            updateUI();
-        }
-
-        async function deleteMachine(index) {
-            if(confirm(`¿Estás seguro de eliminar permanentemente la máquina "${machines[index].name}"?`)) {
-                machines.splice(index, 1);
-                await saveStateAndSync();
-                updateUI();
-            }
-        }
-
-        async function registerMachine() {
-            let macInput = prompt("Ingresa la MAC del ESP32 (ej: 24:6F:28:...):");
-            if(macInput) {
-                let nameInput = prompt("Nombre o ubicación (ej: Peluchera Local 1):");
-                let locInput = prompt("Ubicación del local (ej: Mall Plaza):", "Local Principal");
-                machines.push({ 
-                    mac: macInput, 
-                    name: nameInput || 'Terminal Terreno', 
-                    location: locInput || 'Local Principal',
-                    lat: -33.4489,
-                    lng: -70.6693,
-                    sales: 0, box: 0, prizes: 0, wifi: -50, active: true, 
-                    coinInitial: 3768, 
-                    prizeInitial: 1164, 
-                    dailyLogs: {}, withdrawalHistory: [] 
-                });
-                await saveStateAndSync();
-                updateUI();
-                alert("¡Máquina registrada con éxito!");
-            }
-        }
-
-        function openMachineReport(index) {
-            const m = machines[index];
-            
-            let lastClosure = (m.withdrawalHistory && m.withdrawalHistory.length > 0 && m.sales === 0) ? m.withdrawalHistory[0] : null;
-            
-            let cInit, cFinal, cDelta, dineroRegistrado;
-            if (lastClosure && lastClosure.coinInit !== undefined) {
-                cInit = lastClosure.coinInit;
-                cFinal = lastClosure.coinFinal;
-                cDelta = lastClosure.coinsDelta;
-                dineroRegistrado = lastClosure.amount;
-            } else {
-                cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
-                let telemetryPulses = Math.floor((m.sales || 0) / 100);
-                cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
-                cDelta = Math.max(0, cFinal - cInit);
-                dineroRegistrado = cDelta * 100;
-            }
-
-            if (currentRole === 'cliente') {
-                // INFORME LIMPIO Y TRANSPARENTE PARA EL LOCATARIO (SIN PREMIOS)
-                document.getElementById('report-title').innerText = `REPORTE DE TRANSPARENCIA Y CONTABILIDAD - ${m.name.toUpperCase()}`;
-                document.getElementById('report-date').innerText = `Fecha de Emisión: ${new Date().toLocaleString()}`;
-
-                document.getElementById('report-content-body').innerHTML = `
-                    <div style="margin-bottom: 15px; font-size: 0.85rem; line-height: 1.5; background: #f8fafc; padding: 12px; border-radius: 6px; border: 1px solid #e2e8f0;">
-                        <p><b>Ubicación / Local:</b> ${m.location || 'Local Principal'}</p>
-                        <p><b>Estado del Terminal:</b> <span style="color: #10b981; font-weight:bold;">Operativo y Conectado</span></p>
-                    </div>
-                    <p style="font-weight: bold; margin-bottom: 6px; color: #1e293b;">📊 Auditoría de Entradas (Contador Mecánico de Monedas):</p>
-                    <table class="letter-table" style="margin-bottom: 15px;">
-                        <thead>
-                            <tr><th>Concepto</th><th>Lectura / Valor</th></tr>
-                        </thead>
-                        <tbody>
-                            <tr><td><b>Contador Inicial (Inicio Periodo)</b></td><td>${cInit} un.</td></tr>
-                            <tr><td><b>Contador Final (Cierre Actual)</b></td><td>${cFinal} un.</td></tr>
-                            <tr><td><b>Total Monedas Registradas (Delta)</b></td><td><b>${cDelta} un.</b></td></tr>
-                        </tbody>
-                    </table>
-                    <p style="font-weight: bold; margin-bottom: 6px; color: #1e293b;">💵 Contabilidad de Dinero Registrado:</p>
-                    <table class="letter-table">
-                        <thead>
-                            <tr><th>Descripción del Ingreso</th><th>Monto Total Calculado</th></tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td><b>Total Ingresado en la Máquina (${cDelta} monedas × $100)</b></td>
-                                <td style="font-size: 1.1rem; color: #059669; font-weight: bold;">$${dineroRegistrado.toLocaleString()} CLP</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                    <p style="font-size: 0.75rem; color: #64748b; margin-top: 15px; text-align: center;">Este reporte certifica los registros mecánicos oficiales para la rendición transparente entre el locatario y Inversiones WinWin SpA.</p>
-                `;
-            } else {
-                // INFORME COMPLETO DE GERENCIA (ADMIN)
-                document.getElementById('report-title').innerText = `INFORME TÉCNICO Y FINANCIERO - ${m.name.toUpperCase()}`;
-                document.getElementById('report-date').innerText = `Emisión: ${new Date().toLocaleString()}`;
-
-                let pInit = m.prizeInitial !== undefined ? m.prizeInitial : 1164;
-                let pDelta = m.prizes || 0;
-                let pFinal = pInit + pDelta;
-
-                let withdrawalsHtml = '';
-                if(m.withdrawalHistory && m.withdrawalHistory.length > 0) {
-                    m.withdrawalHistory.forEach(w => {
-                        let detalleMonedas = (w.coinsDelta !== undefined) ? ` (${w.coinsDelta} un.)` : '';
-                        withdrawalsHtml += `<tr><td>${w.date}</td><td><b>${w.operator}</b></td><td>$${w.amount.toLocaleString()} CLP${detalleMonedas}</td><td>${w.note}</td></tr>`;
-                    });
-                } else {
-                    withdrawalsHtml = `<tr><td colspan="4" style="text-align:center;">No hay cierres o retiros registrados aún.</td></tr>`;
-                }
-
-                document.getElementById('report-content-body').innerHTML = `
-                    <div style="margin-bottom: 12px; font-size: 0.8rem; line-height: 1.4;">
-                        <p><b>MAC:</b> <code>${m.mac}</code></p>
-                        <p><b>Ubicación:</b> ${m.location || 'Local por definir'}</p>
-                        <p><b>Contador Monedas (Inicio ➔ Final):</b> ${cInit} ➔ ${cFinal} (Delta: ${cDelta} un. | $${dineroRegistrado.toLocaleString()} CLP)</p>
-                        <p><b>Contador Premios (Inicio ➔ Final):</b> ${pInit} ➔ ${pFinal} (Entregados: ${pDelta} un.)</p>
-                    </div>
-                    <p><b>💵 Historial de Cierres de Caja y Auditoría:</b></p>
-                    <table class="letter-table" style="margin-top:5px; margin-bottom:15px;">
-                        <thead><tr><th>Fecha y Hora</th><th>Responsable</th><th>Monto Recaudado</th><th>Observación</th></tr></thead>
-                        <tbody>${withdrawalsHtml}</tbody>
-                    </table>
-                `;
-            }
-
-            document.getElementById('print-modal').style.display = 'flex';
-        }
-
-        function openGlobalReport() {
-            if (currentRole !== 'gerencia') return;
-            document.getElementById('report-title').innerText = `INFORME MENSUAL OFICIAL - FLOTA WINWIN`;
-            document.getElementById('report-date').innerText = `Emisión: ${new Date().toLocaleString()}`;
-
-            let totalRecaudado = 0;
-            let totalPrizes = machines.reduce((a,b)=>a + (b.prizes||0), 0);
-
-            let tableRows = '';
-            if(machines.length === 0) {
-                tableRows = `<tr><td colspan="5" style="text-align:center;">No hay terminales activos en la flota.</td></tr>`;
-            } else {
-                machines.forEach(m => {
-                    let pInit = m.prizeInitial !== undefined ? m.prizeInitial : 1164;
-                    let pDelta = m.prizes || 0;
-                    let pFinal = pInit + pDelta;
-
-                    let cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
-                    let telemetryPulses = Math.floor((m.sales || 0) / 100);
-                    let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
-                    let cDelta = Math.max(0, cFinal - cInit);
-                    let recMachine = cDelta * 100;
-                    totalRecaudado += recMachine;
-                    tableRows += `<tr><td><b>${m.name}</b><br><code style="font-size:0.65rem">${m.mac}</code></td><td>${cInit} ➔ ${cFinal}</td><td>$${recMachine.toLocaleString()}</td><td>${pDelta} un.</td><td>${m.active ? 'Activa' : 'Pausada'}</td></tr>`;
-                });
-            }
-
-            document.getElementById('report-content-body').innerHTML = `
-                <div style="margin-bottom: 12px; font-size: 0.8rem; line-height: 1.4;">
-                    <p><b>Total Terminales:</b> ${machines.length}</p>
-                    <p><b>Recaudación Total Calculada (Contadores):</b> $${totalRecaudado.toLocaleString()} CLP</p>
-                    <p><b>Premios Totales Flota (Telemetría):</b> ${totalPrizes} un.</p>
-                </div>
-                <table class="letter-table">
-                    <thead><tr><th>Máquina (MAC)</th><th>Contador (Inicio ➔ Final)</th><th>Recaudación Ciclo</th><th>Premios</th><th>Estado</th></tr></thead>
-                    <tbody>${tableRows}</tbody>
-                </table>
-            `;
-            document.getElementById('print-modal').style.display = 'flex';
-        }
-
-        function closeReport() { document.getElementById('print-modal').style.display = 'none'; }
-
-        fetchTelemetry();
-        setInterval(fetchTelemetry, 3000);
-    </script>
-</body>
-</html>
+            let cFinalCurrent = (m.coinManualBase
