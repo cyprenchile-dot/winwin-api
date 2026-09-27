@@ -12,13 +12,22 @@ def load_data():
     if os.path.exists(DATABASE_FILE):
         with open(DATABASE_FILE, 'r') as f:
             try:
-                return json.load(f)
+                data = json.load(f)
+                if isinstance(data, dict):
+                    if "machines" not in data:
+                        data["machines"] = []
+                    if "dailyLedger" not in data:
+                        data["dailyLedger"] = []
+                    if "auditLogs" not in data:
+                        data["auditLogs"] = []
+                    return data
             except:
-                return {}
-    # Estructura base inicial que espera el index.html
+                pass
+    # Estructura base inicial
     return {
         "dailyLedger": [],
-        "machines": []
+        "machines": [],
+        "auditLogs": []
     }
 
 def save_data(data):
@@ -41,23 +50,22 @@ def receive_telemetry():
 
     db = load_data()
     
-    # Asegurar que exista la lista de máquinas
     if "machines" not in db:
         db["machines"] = []
+    if "auditLogs" not in db:
+        db["auditLogs"] = []
 
-    # Buscar si la máquina ya existe en la lista
     machine = None
     for m in db["machines"]:
         if m.get("mac") == dev_id or m.get("device_id") == dev_id:
             machine = m
             break
 
-    # Si no existe, la creamos con las llaves exactas que exige index.html (box y sales)
     if not machine:
         machine = {
             "mac": dev_id,
             "device_id": dev_id,
-            "name": "Terminal 10:01",
+            "name": f"Terminal {dev_id[-5:]}",
             "active": True,
             "box": 0,
             "sales": 0,
@@ -68,16 +76,13 @@ def receive_telemetry():
         }
         db["machines"].append(machine)
 
-    # Cada pulso del billetero equivale exactamente a 100 CLP
     if coins_received > 0:
         monto_clp = coins_received * 100
         machine["box"] += monto_clp
         machine["sales"] += monto_clp
-        print(f"💰 [MONEDA] ¡+{monto_clp} CLP sumados a {dev_id}! Total box: {machine['box']}")
 
     if prize_status == "dispense":
         machine["prizes"] += 1
-        print(f"🎁 [PREMIO] ¡Premio registrado en {dev_id}!")
 
     machine["wifi"] = wifi_signal
     machine["active"] = True
@@ -86,10 +91,21 @@ def receive_telemetry():
 
     return jsonify({"status": "success", "data": machine}), 200
 
-# Ruta exacta que consulta el index.html en formato idéntico al que requiere
-@app.route('/api/sync-fleet', methods=['GET'])
+# Ruta de sincronización con soporte GET y POST para guardar máquinas, bitácoras y auditoría
+@app.route('/api/sync-fleet', methods=['GET', 'POST'])
 def sync_fleet():
     db = load_data()
+    if request.method == 'POST':
+        req_data = request.get_json(force=True)
+        if req_data:
+            if "machines" in req_data:
+                db["machines"] = req_data["machines"]
+            if "dailyLedger" in req_data:
+                db["dailyLedger"] = req_data["dailyLedger"]
+            if "auditLogs" in req_data:
+                db["auditLogs"] = req_data["auditLogs"]
+            save_data(db)
+        return jsonify({"status": "synced", "data": db}), 200
     return jsonify(db), 200
 
 @app.route('/api/status', methods=['GET'])
