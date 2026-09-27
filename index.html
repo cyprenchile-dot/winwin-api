@@ -473,7 +473,6 @@
 
                 const now = audioCtx.currentTime;
                 
-                // Impacto metálico nítido (Tono de moneda cayendo)
                 let osc = audioCtx.createOscillator();
                 let gain = audioCtx.createGain();
                 osc.type = 'sine';
@@ -518,7 +517,7 @@
             }
         }
 
-        // Registro síncrono local instantáneo + guardado en segundo plano
+        // Registro seguro y síncrono para evitar bloqueos
         function logAuditEvent(action, machineName, operator, details) {
             let event = {
                 timestamp: new Date().toLocaleString(),
@@ -531,7 +530,7 @@
             if (auditLogs.length > 400) auditLogs.pop();
             renderAuditLog();
             saveToLocalStorage();
-            saveStateAndSync(); // Ejecuta red en segundo plano sin bloquear interfaz
+            saveStateAndSync();
         }
 
         function renderAuditLog() {
@@ -658,7 +657,6 @@
                 let prevSales = previousSalesState[m.mac] || 0;
                 let currentSales = m.sales || 0;
                 
-                // Reproduce el sonido de una moneda cayendo exactamente por cada bloque de 100 CLP ingresados
                 if (currentSales > prevSales) {
                     let diff = currentSales - prevSales;
                     let coinsCount = Math.floor(diff / 100); 
@@ -813,7 +811,7 @@
                     actionsHtml = `
                         <button class="btn-sm btn-counter" onclick="openCounterModal(${index})">🔢 Contadores</button>
                         <button class="btn-sm btn-edit" onclick="openEditModal(${index})">✏️ Editar</button>
-                        <button class="btn-sm btn-pause" onclick="toggleMachine(${index})">${m.active ? 'Pausar' : 'Activar'}</button>
+                        <button class="btn-sm btn-pause" onclick="toggleMachine(${index})">${m.active !== false ? 'Pausar' : 'Activar'}</button>
                         <button class="btn-sm btn-danger" onclick="resetMachineBox(${index})">Vaciar Box</button>
                         <button class="btn-sm btn-report" onclick="openMachineReport(${index})">📄 Informe</button>
                         <button class="btn-sm btn-delete" onclick="deleteMachine(${index})">🗑️</button>
@@ -847,8 +845,9 @@
             });
         }
 
-        // Modal de Contadores Físicos
+        // Modal de Contadores Físicos con validación de índice segura
         function openCounterModal(index) {
+            if (index === undefined || index < 0 || !machines[index]) return;
             let m = machines[index];
             document.getElementById('counter-index').value = index;
             
@@ -877,7 +876,8 @@
         }
 
         function saveCounters() {
-            let index = document.getElementById('counter-index').value;
+            let index = parseInt(document.getElementById('counter-index').value);
+            if (isNaN(index) || index < 0 || !machines[index]) return;
             let m = machines[index];
 
             let rawInit = document.getElementById('modal-coin-init').value;
@@ -925,6 +925,7 @@
         }
 
         function openEditModal(index) {
+            if (index === undefined || index < 0 || !machines[index]) return;
             let m = machines[index];
             document.getElementById('edit-index').value = index;
             document.getElementById('edit-name').value = m.name || '';
@@ -968,7 +969,8 @@
         }
 
         function saveEditedMachine() {
-            let index = document.getElementById('edit-index').value;
+            let index = parseInt(document.getElementById('edit-index').value);
+            if (isNaN(index) || index < 0 || !machines[index]) return;
             let m = machines[index];
 
             let oldName = m.name;
@@ -1035,6 +1037,7 @@
         }
 
         function resetMachineBox(index) {
+            if (index === undefined || index < 0 || !machines[index]) return;
             let m = machines[index];
             let operador = prompt(`Cierre de caja para "${m.name}". Ingresa quién realiza el retiro:`, "Daniel");
             if (!operador) return; 
@@ -1079,6 +1082,7 @@
         }
 
         function toggleMachine(index) {
+            if (index === undefined || index < 0 || !machines[index]) return;
             machines[index].active = !machines[index].active;
             let statusStr = machines[index].active ? "Activada" : "Pausada";
             logAuditEvent("CAMBIO DE ESTADO", machines[index].name, null, `Máquina ${statusStr}`);
@@ -1087,6 +1091,7 @@
         }
 
         function deleteMachine(index) {
+            if (index === undefined || index < 0 || !machines[index]) return;
             let mName = machines[index].name;
             if(confirm(`¿Estás seguro de eliminar permanentemente la máquina "${mName}"?`)) {
                 machines.splice(index, 1);
@@ -1124,6 +1129,7 @@
         }
 
         function openMachineReport(index) {
+            if (index === undefined || index < 0 || !machines[index]) return;
             const m = machines[index];
             
             let lastClosure = (m.withdrawalHistory && m.withdrawalHistory.length > 0 && m.sales === 0) ? m.withdrawalHistory[0] : null;
