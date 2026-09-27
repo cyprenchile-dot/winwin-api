@@ -460,7 +460,7 @@
             }
         }
 
-        // Efecto de sonido idéntico a "Monedas Cayendo" clásico (Cascada metálica de arcade)
+        // Efecto realista de moneda real cayendo en monedero (Sin cambios de tono / sin efecto láser)
         function playCoinDropSound() {
             if (!soundEnabled) return;
             try {
@@ -471,33 +471,55 @@
                     audioCtx.resume();
                 }
 
-                // Generar secuencia en cascada de múltiples monedas tintineando rápidamente
-                const coinJingles = [
-                    { freq: 2793.83, delay: 0.00 }, // F6 (Impacto inicial)
-                    { freq: 3135.96, delay: 0.04 }, // G#6 (Rebote 1)
-                    { freq: 2349.32, delay: 0.08 }, // D#6 (Rebote 2)
-                    { freq: 3520.00, delay: 0.12 }, // A6 (Rebote 3)
-                    { freq: 1760.00, delay: 0.18 }  // A5 (Golpe seco caja metálica final)
-                ];
-
-                coinJingles.forEach((coin) => {
-                    let now = audioCtx.currentTime + coin.delay;
+                const now = audioCtx.currentTime;
+                
+                // 1. Frecuencias metálicas fijas (Tono exacto de moneda, sin deslizamientos)
+                const metallicTones = [2349.32, 3135.96, 4186.01]; // D7, G7, C8
+                
+                metallicTones.forEach((freq, idx) => {
                     let osc = audioCtx.createOscillator();
                     let gain = audioCtx.createGain();
                     
-                    osc.type = (coin.delay > 0.1) ? 'sine' : 'triangle';
-                    osc.frequency.setValueAtTime(coin.freq, now);
-                    osc.frequency.exponentialRampToValueAtTime(coin.freq * 0.6, now + 0.1);
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(freq, now); // Frecuencia fija, cero efecto láser
                     
-                    gain.gain.setValueAtTime(0.75, now);
-                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+                    let duration = 0.08 + (idx * 0.03);
+                    gain.gain.setValueAtTime(0.5 / (idx + 1), now);
+                    gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
                     
                     osc.connect(gain);
                     gain.connect(audioCtx.destination);
                     
                     osc.start(now);
-                    osc.stop(now + 0.15);
+                    osc.stop(now + duration);
                 });
+
+                // 2. Ruido blanco filtrado para simular el roce físico de la moneda en la ranura
+                let bufferSize = audioCtx.sampleRate * 0.04; 
+                let buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+                let data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = Math.random() * 2 - 1;
+                }
+
+                let noise = audioCtx.createBufferSource();
+                noise.buffer = buffer;
+
+                let filter = audioCtx.createBiquadFilter();
+                filter.type = 'bandpass';
+                filter.frequency.setValueAtTime(4000, now);
+                filter.Q.setValueAtTime(4, now);
+
+                let noiseGain = audioCtx.createGain();
+                noiseGain.gain.setValueAtTime(0.4, now);
+                noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
+
+                noise.connect(filter);
+                filter.connect(noiseGain);
+                noiseGain.gain.connect(audioCtx.destination);
+
+                noise.start(now);
+                noise.stop(now + 0.04);
 
             } catch(e) {
                 console.log("Audio bloqueado o no disponible", e);
@@ -668,12 +690,12 @@
                 let prevSales = previousSalesState[m.mac] || 0;
                 let currentSales = m.sales || 0;
                 
-                // Reproduce el sonido de la cascada de monedas exactamente por cada 100 CLP ingresados
+                // Reproduce el sonido de la moneda exactamente por cada bloque de 100 CLP
                 if (currentSales > prevSales) {
                     let diff = currentSales - prevSales;
                     let coinsCount = Math.floor(diff / 100); 
                     for (let i = 0; i < coinsCount; i++) {
-                        setTimeout(() => playCoinDropSound(), i * 250); 
+                        setTimeout(() => playCoinDropSound(), i * 200); 
                     }
                 }
                 previousSalesState[m.mac] = currentSales;
