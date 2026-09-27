@@ -206,7 +206,7 @@
             .letter-page { box-shadow: none; margin: 0; width: 100%; padding: 1cm; }
         }
     </style>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"></script>
 </head>
 <body>
 
@@ -294,7 +294,7 @@
     <div class="audit-card gerencia-only">
         <div class="analytics-header" style="margin-bottom: 4px;">
             <h2>🛡️ Bitácora Maestra de Auditoría Forense y Trazabilidad</h2>
-            <span style="font-size: 0.65rem; color: var(--accent-yellow);">Registro inmutable de operaciones sincronizado</span>
+            <span style="font-size: 0.65rem; color: var(--accent-yellow);">Doble persistencia (Servidor + LocalStorage)</span>
         </div>
         <div class="audit-table-container">
             <table class="audit-table">
@@ -426,7 +426,8 @@
 
         let machines = [];
         let dailyLedger = [];
-        let auditLogs = []; // Bitácora de auditoría forense
+        let auditLogs = []; 
+        let previousSalesState = {}; // Control para reproducir sonido de moneda al aumentar ventas
         let fleetMap = null;
         let fleetMarkers = [];
         let editMap = null;
@@ -440,10 +441,54 @@
                 attribution: '&copy; OpenStreetMap contributors'
             }).addTo(fleetMap);
             
+            loadFromLocalStorage();
             fetchTelemetry();
         });
 
-        // Función centralizada para registrar eventos en la Bitácora Forense y sincronizarlos
+        // Generador de sonido de moneda (Ding metálico web nativo)
+        function playCoinSound() {
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(988, audioCtx.currentTime); // Nota B5
+                osc.frequency.exponentialRampToValueAtTime(1318, audioCtx.currentTime + 0.08); // Nota E6
+                gain.gain.setValueAtTime(0.25, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.25);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.25);
+            } catch(e) {
+                // Audio bloqueado hasta interacción del usuario
+            }
+        }
+
+        function loadFromLocalStorage() {
+            try {
+                let localMachines = localStorage.getItem('winwin_machines');
+                let localLedger = localStorage.getItem('winwin_ledger');
+                let localAudit = localStorage.getItem('winwin_audit');
+                if (localMachines) machines = JSON.parse(localMachines);
+                if (localLedger) dailyLedger = JSON.parse(localLedger);
+                if (localAudit) auditLogs = JSON.parse(localAudit);
+                updateUI();
+            } catch (e) {
+                console.log("Error cargando LocalStorage", e);
+            }
+        }
+
+        function saveToLocalStorage() {
+            try {
+                localStorage.setItem('winwin_machines', JSON.stringify(machines));
+                localStorage.setItem('winwin_ledger', JSON.stringify(dailyLedger));
+                localStorage.setItem('winwin_audit', JSON.stringify(auditLogs));
+            } catch (e) {
+                console.log("Error guardando LocalStorage", e);
+            }
+        }
+
         async function logAuditEvent(action, machineName, operator, details) {
             let event = {
                 timestamp: new Date().toLocaleString(),
@@ -453,8 +498,9 @@
                 details: details || 'Sin detalles'
             };
             auditLogs.unshift(event);
-            if (auditLogs.length > 300) auditLogs.pop();
+            if (auditLogs.length > 400) auditLogs.pop();
             renderAuditLog();
+            saveToLocalStorage();
             await saveStateAndSync();
         }
 
@@ -500,7 +546,6 @@
             updateUI();
         }
 
-        // Renderizado contador mecánico de 6 dígitos
         function formatMechanicalCounter(value) {
             let str = String(value || 0).padStart(6, '0');
             let html = '<div class="mechanical-counter">';
@@ -511,7 +556,6 @@
             return html;
         }
 
-        // Traducción de dBm a Señal Visual Gradual
         function getWifiDetails(dBm) {
             let val = dBm || -50;
             if (val >= -55) return { label: 'Excelente', color: '#10b981', level: 4 };
@@ -544,6 +588,7 @@
         }
 
         async function saveStateAndSync() {
+            saveToLocalStorage();
             try {
                 await fetch('https://winwin-api-v2.onrender.com/api/sync-fleet', {
                     method: 'POST',
@@ -557,21 +602,22 @@
 
         async function fetchTelemetry() {
             try {
-                const response = await fetch('https://winwin-api-v2.onrender.com/api/sync-fleet');
+                const response = await fetch('https://winwin-api-v2.onrender.com/api/sync-fleet', { signal: AbortSignal.timeout(5000) });
                 if(response.ok) {
                     const data = await response.json();
                     if(data && Array.isArray(data.machines)) {
                         machines = data.machines;
                         if(data.dailyLedger) dailyLedger = data.dailyLedger;
                         if(data.auditLogs && Array.isArray(data.auditLogs)) auditLogs = data.auditLogs;
+                        saveToLocalStorage();
                         updateUI();
                     }
                     document.getElementById('server-status').innerText = "ONLINE";
                     document.getElementById('server-status').style.color = "var(--accent-green)";
                 }
             } catch (error) {
-                document.getElementById('server-status').innerText = "OFFLINE";
-                document.getElementById('server-status').style.color = "#ef4444";
+                document.getElementById('server-status').innerText = "OFFLINE (Modo Local)";
+                document.getElementById('server-status').style.color = "#f59e0b";
             }
         }
 
@@ -583,8 +629,18 @@
             let wifiSum = 0;
 
             machines.forEach(m => {
-                if (m.is_online) onlineCount++;
-                totalDaily += (m.sales || 0);
+                let prevSales = previousSalesState[m.mac] || 0;
+                let currentSales = m.sales || 0;
+                
+                // Si aumentaron las ventas (entró dinero nuevo), reproducir sonido de moneda
+                if (currentSales > prevSales) {
+                    playCoinSound();
+                }
+                previousSalesState[m.mac] = currentSales;
+
+                let isOnline = m.is_online !== false;
+                if (isOnline) onlineCount++;
+                totalDaily += currentSales;
                 totalBox += (m.box || 0);
                 
                 let pDelta = m.prizes || 0;
@@ -620,8 +676,9 @@
             listToRender.forEach(m => {
                 let lat = m.lat || -33.4489;
                 let lng = m.lng || -70.6693;
-                let pinColor = m.is_online ? '#10b981' : '#ef4444'; 
-                let statusText = m.is_online ? 'ONLINE' : 'OFFLINE';
+                let isOnline = m.is_online !== false;
+                let pinColor = isOnline ? '#10b981' : '#ef4444'; 
+                let statusText = isOnline ? 'ONLINE' : 'OFFLINE';
 
                 let marker = L.circleMarker([lat, lng], {
                     radius: 10,
@@ -671,8 +728,9 @@
                 const boxDiv = document.createElement('div');
                 boxDiv.className = `machine-box`;
 
-                let connClass = m.is_online ? 'online' : 'offline';
-                let connText = m.is_online ? 'ONLINE' : 'OFFLINE';
+                let isOnline = m.is_online !== false;
+                let connClass = isOnline ? 'online' : 'offline';
+                let connText = isOnline ? 'ONLINE' : 'OFFLINE';
 
                 if (m.coinInitial === undefined) m.coinInitial = 3768;
                 let cInit = m.coinInitial;
@@ -745,7 +803,7 @@
                         </div>
                         <div class="led-indicator">
                             <span class="led-dot ${connClass}"></span>
-                            <span style="color: ${m.is_online ? 'var(--accent-green)' : 'var(--accent-red)'};">${connText}</span>
+                            <span style="color: ${isOnline ? 'var(--accent-green)' : 'var(--accent-red)'};">${connText}</span>
                         </div>
                     </div>
                     <div class="machine-stats-grid">
@@ -986,12 +1044,12 @@
             m.sales = 0;
             m.box = 0;
 
-            await logAuditEvent("CIERRE DE CAJA INDIVIDUAL", m.name, operador, `Recaudado: $${dineroRecaudado.toLocaleString()} CLP (${cDelta} monedas). Premios: ${pDelta} un. Obs: ${observacion}`);
+            await logAuditEvent("CIERRE DE CAJA INDIVIDUAL", m.name, operador, `Recaudado: $${dineroRegistrado.toLocaleString()} CLP (${cDelta} monedas). Premios: ${pDelta} un. Obs: ${observacion}`);
 
             await saveStateAndSync();
             updateUI();
 
-            alert(`✅ Cierre registrado por ${operador}\nMonto recaudado: $${dineroRecaudado.toLocaleString()} CLP (${cDelta} monedas)\nPremios entregados: ${pDelta} un.\nNuevos Contadores Iniciales fijados.`);
+            alert(`✅ Cierre registrado por ${operador}\nMonto recaudado: $${dineroRegistrado.toLocaleString()} CLP (${cDelta} monedas)\nPremios entregados: ${pDelta} un.\nNuevos Contadores Iniciales fijados.`);
         }
 
         async function toggleMachine(index) {
@@ -1028,6 +1086,7 @@
                     lat: -33.4489,
                     lng: -70.6693,
                     sales: 0, box: 0, prizes: 0, wifi: -50, active: true, 
+                    is_online: true,
                     coinInitial: 3768, 
                     prizeInitial: 1164, 
                     dailyLogs: {}, withdrawalHistory: [] 
