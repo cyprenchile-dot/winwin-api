@@ -4,7 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Inversiones WinWin SpA - Telemetría Pro</title>
+    <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Leaflet CSS para los Mapas -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         :root {
@@ -85,6 +87,33 @@
             border-radius: 2px;
             border: 1px solid #1e293b;
             text-shadow: 0 0 5px rgba(56, 189, 248, 0.4);
+        }
+
+        /* ESTILOS WIFI VISUAL GRADUAL */
+        .wifi-visual-container {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .wifi-header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+        .wifi-bars {
+            display: flex;
+            gap: 3px;
+            align-items: flex-end;
+            height: 14px;
+            margin-top: 2px;
+        }
+        .wifi-bar {
+            width: 5px;
+            border-radius: 1px;
+            background: rgba(255,255,255,0.15);
+            transition: 0.3s;
         }
 
         /* SECCIÓN DE MÁQUINAS */
@@ -372,6 +401,8 @@
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '&copy; OpenStreetMap contributors'
             }).addTo(fleetMap);
+            
+            fetchTelemetry();
         });
 
         function toggleUserRole() {
@@ -403,6 +434,38 @@
                 html += `<div class="counter-digit">${char}</div>`;
             }
             html += '</div>';
+            return html;
+        }
+
+        // Traducción de dBm a Señal Visual Gradual (Nula, Débil, Regular, Buena, Muy buena, Excelente)
+        function getWifiDetails(dBm) {
+            let val = dBm || -50;
+            if (val >= -55) return { label: 'Excelente', color: '#10b981', level: 4 };
+            if (val >= -65) return { label: 'Muy buena', color: '#34d399', level: 3 };
+            if (val >= -75) return { label: 'Buena', color: '#3b82f6', level: 2 };
+            if (val >= -85) return { label: 'Regular', color: '#f59e0b', level: 1 };
+            if (val >= -95) return { label: 'Débil', color: '#f97316', level: 0.5 };
+            return { label: 'Nula', color: '#ef4444', level: 0 };
+        }
+
+        function formatWifiVisual(dBm) {
+            let info = getWifiDetails(dBm);
+            let activeBars = info.level === 4 ? 4 : (info.level === 3 ? 3 : (info.level === 2 ? 2 : (info.level === 1 ? 1 : (info.level === 0.5 ? 1 : 0))));
+            
+            let html = `
+                <div class="wifi-visual-container">
+                    <div class="wifi-header-row">
+                        <span style="color: ${info.color}; font-weight: 800;">${info.label}</span>
+                        <span style="font-size: 0.65rem; color: var(--text-muted);">${dBm || -50} dBm</span>
+                    </div>
+                    <div class="wifi-bars">
+                        <div class="wifi-bar" style="background: ${activeBars >= 1 ? info.color : 'rgba(255,255,255,0.15)'}; height: 4px;"></div>
+                        <div class="wifi-bar" style="background: ${activeBars >= 2 ? info.color : 'rgba(255,255,255,0.15)'}; height: 7px;"></div>
+                        <div class="wifi-bar" style="background: ${activeBars >= 3 ? info.color : 'rgba(255,255,255,0.15)'}; height: 10px;"></div>
+                        <div class="wifi-bar" style="background: ${activeBars >= 4 ? info.color : 'rgba(255,255,255,0.15)'}; height: 14px;"></div>
+                    </div>
+                </div>
+            `;
             return html;
         }
 
@@ -561,7 +624,7 @@
                     </div>
                     <div class="stat-box">
                         <span>SEÑAL WI-FI</span>
-                        <b>${m.wifi || -50} dBm</b>
+                        ${formatWifiVisual(m.wifi)}
                     </div>
                 `;
 
