@@ -129,4 +129,35 @@
         .machine-mac { font-size: 0.7rem; color: var(--text-muted); font-family: monospace; margin-top: 2px; }
         .machine-location { font-size: 0.75rem; color: var(--accent-blue); margin-top: 3px; font-weight: 600; }
 
-        .led-indicator { display: flex; align-items: center;
+        .led-indicator { display: flex; align-items: center; gap: 5px; font-size: 0.7rem; font-weight: bold; background: rgba(255,255,255,0.03); padding: 3px 8px; border-radius: 15px; border: 1px solid rgba(255,255,255,0.05); }
+        .led-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+        .led-dot.online { background-color: var(--accent-green); box-shadow: 0 0 8px var(--accent-green); }
+        .led-dot.offline { background-color: var(--accent-red); box-shadow: 0 0 8px var(--accent-red); }
+
+        .machine-stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+        .stat-box { background: rgba(255, 255, 255, 0.015); border: 1px solid rgba(255, 255, 255, 0.04); border-radius: 8px; padding: 10px; }
+        .stat-box.telemetry-highlight { background: rgba(59, 130, 246, 0.05); border-color: rgba(59, 130, 246, 0.2); }
+        .stat-box span { display: block; font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 2px; font-weight: 600; }
+        .stat-box b { font-size: 1.05rem; color: #fff; font-weight: 800; }
+
+        .machine-footer-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+        .btn-sm { padding: 6px 10px; font-size: 0.7rem; border-radius: 5px; border: none; font-weight: bold; cursor: pointer; flex: 1; text-align: center; }
+        .btn-edit { background: var(--accent-blue); color: white; }
+        .btn-pause { background: #3b82f6; color: white; }
+        .btn-danger { background: #ef4444; color: white; }
+        .btn-report { background: var(--accent-purple); color: white; }
+        .btn-counter { background: #f59e0b; color: #000; }
+        .btn-delete { background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); }
+
+        /* MAPA GENERAL DE LA FLOTA */
+        .fleet-map-card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 15px; display: flex; flex-direction: column; margin-bottom: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+        .fleet-map-card h2 { font-size: 0.95rem; margin-bottom: 10px; color: var(--text-main); font-weight: 700; }
+        #dashboard-map { width: 100%; height: 350px; border-radius: 8px; border: 1px solid var(--border-color); }
+
+        /* ANALYTICS */
+        .analytics-grid { display: grid; grid-template-columns: 1fr; gap: 15px; margin-bottom: 15px; }
+        @media(min-width: 900px) { .analytics-grid { grid-template-columns: 1fr 1fr; } }
+
+        .analytics-card { background: var(--card-bg); padding: 15px; border-radius: 12px; border: 1px solid var(--border-color); box-shadow: 0 4px 10px rgba(0,0,0,0.2); display: flex; flex-direction: column; height: 210px; }
+        .analytics-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .analytics-header h2 { font-size: 0.8
