@@ -153,6 +153,12 @@
         .btn-delete { background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); }
         .btn-delete:hover { background: #ef4444; color: white; }
 
+        /* SECCIÓN HISTORIAL DIARIO EN MÁQUINA */
+        .daily-log-box { background: rgba(2, 6, 23, 0.4); border: 1px solid #1e293b; border-radius: 6px; padding: 8px; margin-top: 8px; font-size: 0.7rem; }
+        .daily-log-box h4 { color: var(--accent-yellow); font-size: 0.65rem; text-transform: uppercase; margin-bottom: 4px; }
+        .daily-log-row { display: flex; justify-content: space-between; padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,0.03); }
+        .daily-log-row:last-child { border-bottom: none; }
+
         /* MAPA GENERAL DE LA FLOTA */
         .fleet-map-card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 15px; display: flex; flex-direction: column; margin-bottom: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
         .fleet-map-card h2 { font-size: 0.95rem; margin-bottom: 10px; color: var(--text-main); font-weight: 700; }
@@ -686,6 +692,8 @@
             let onlineCount = 0;
             let wifiSum = 0;
 
+            let todayStr = new Date().toISOString().slice(0, 10); // Formato YYYY-MM-DD para bitácora diaria
+
             machines.forEach(m => {
                 let prevSales = previousSalesState[m.mac] || 0;
                 let currentSales = m.sales || 0;
@@ -699,6 +707,19 @@
                     }
                 }
                 previousSalesState[m.mac] = currentSales;
+
+                // RASTREO Y DESGLOSE DIARIO POR MÁQUINA
+                if (!m.dailyLogs) m.dailyLogs = {};
+                if (m.lastSalesCount === undefined) m.lastSalesCount = currentSales;
+                
+                if (currentSales > m.lastSalesCount) {
+                    let diff = currentSales - m.lastSalesCount;
+                    m.dailyLogs[todayStr] = (m.dailyLogs[todayStr] || 0) + diff;
+                    m.lastSalesCount = currentSales;
+                } else if (currentSales < m.lastSalesCount) {
+                    // Si se reseteó la caja, actualizamos el tracker sin perder los días pasados
+                    m.lastSalesCount = currentSales;
+                }
 
                 let isOnline = m.is_online !== false;
                 if (isOnline) onlineCount++;
@@ -801,6 +822,19 @@
                 let cDelta = Math.max(0, cFinal - cInit);
                 let dineroRegistrado = cDelta * 100; 
 
+                // Renderizar historial de ventas día a día de esta máquina
+                let dailyLogsHtml = '';
+                if (m.dailyLogs && Object.keys(m.dailyLogs).length > 0) {
+                    dailyLogsHtml = `<div class="daily-log-box"><h4>📅 Desglose Ventas Día a Día</h4>`;
+                    // Ordenar por fecha descendente
+                    let sortedDates = Object.keys(m.dailyLogs).sort().reverse();
+                    sortedDates.forEach(date => {
+                        let amount = m.dailyLogs[date];
+                        dailyLogsHtml += `<div class="daily-log-row"><span>${date}</span> <b>$${amount.toLocaleString()} CLP</b></div>`;
+                    });
+                    dailyLogsHtml += `</div>`;
+                }
+
                 let statsHtml = `
                     <div class="stat-box telemetry-highlight">
                         <span>VENTA DÍA (TELEMETRÍA)</span>
@@ -820,6 +854,9 @@
                     <div class="stat-box">
                         <span>SEÑAL WI-FI</span>
                         ${formatWifiVisual(m.wifi)}
+                    </div>
+                    <div style="grid-column: 1 / -1;">
+                        ${dailyLogsHtml}
                     </div>
                 `;
 
@@ -1060,6 +1097,7 @@
                         m.prizes = 0;
                         m.sales = 0;
                         m.box = 0;
+                        m.lastSalesCount = 0; // Reiniciar tracking de ventas para el nuevo ciclo diario
                     }
                 });
 
@@ -1107,6 +1145,7 @@
             m.prizes = 0;
             m.sales = 0;
             m.box = 0;
+            m.lastSalesCount = 0; // Reiniciar tracking de ventas para el nuevo ciclo
 
             logAuditEvent("CIERRE DE CAJA INDIVIDUAL", m.name, operador, `Recaudado: $${dineroRecaudado.toLocaleString()} CLP (${cDelta} monedas). Premios: ${pDelta} un. Obs: ${observacion}`);
 
@@ -1165,9 +1204,9 @@
         function openMachineReport(index) {
             if (index === undefined || index < 0 || !machines[index]) return;
             const m = machines[index];
-            
+             
             let lastClosure = (m.withdrawalHistory && m.withdrawalHistory.length > 0 && m.sales === 0) ? m.withdrawalHistory[0] : null;
-            
+             
             let cInit, cFinal, cDelta, dineroRegistrado;
             if (lastClosure && lastClosure.coinInit !== undefined) {
                 cInit = lastClosure.coinInit;
