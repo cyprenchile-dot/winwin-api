@@ -163,9 +163,27 @@
         .btn-delete { background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); }
         .btn-delete:hover { background: #ef4444; color: white; }
 
-        /* SECCIÓN HISTORIAL DIARIO EN MÁQUINA */
-        .daily-log-box { background: rgba(2, 6, 23, 0.4); border: 1px solid #1e293b; border-radius: 6px; padding: 6px; margin-top: 6px; font-size: 0.65rem; }
-        .daily-log-box h4 { color: var(--accent-yellow); font-size: 0.6rem; text-transform: uppercase; margin-bottom: 3px; }
+        /* SECCIÓN HISTORIAL DIARIO EN MÁQUINA - CON VENTANA DESLIZABLE (SCROLL) */
+        .daily-log-box { 
+            background: rgba(2, 6, 23, 0.5); 
+            border: 1px solid #1e293b; 
+            border-radius: 6px; 
+            padding: 6px; 
+            margin-top: 6px; 
+            font-size: 0.65rem; 
+            max-height: 80px;        /* Altura fija compacta para habilitar el scroll */
+            overflow-y: auto;        /* Ventana deslizable vertical automática */
+        }
+        .daily-log-box h4 { 
+            color: var(--accent-yellow); 
+            font-size: 0.6rem; 
+            text-transform: uppercase; 
+            margin-bottom: 3px; 
+            position: sticky; 
+            top: 0; 
+            background: #101728;     /* Fondo sólido para que el título no transparente los datos al deslizar */
+            padding: 2px 0; 
+        }
         .daily-log-row { display: flex; justify-content: space-between; padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,0.03); }
         .daily-log-row:last-child { border-bottom: none; }
 
@@ -739,7 +757,7 @@
                 let isOnline = m.is_online !== false;
                 if (isOnline) onlineCount++;
                 
-                // USAR ESTRICTAMENTE LA VENTA DE HOY PARA EL TOTAL DE LA FLOTA (Se reinicia a las 00:00 hrs)
+                // USAR ESTRICTAMENTE LA VENTA DE HOY PARA EL TOTAL DE LA FLOTA
                 let machineTodaySales = (m.dailyLogs && m.dailyLogs[todayStr]) ? m.dailyLogs[todayStr] : 0;
                 totalDaily += machineTodaySales;
 
@@ -866,14 +884,14 @@
                 let cDelta = Math.max(0, cFinal - cInit);
                 let dineroRegistrado = cDelta * 100; 
 
-                // Venta de hoy estricta para el cuadro de la tarjeta
                 let machineTodaySales = (m.dailyLogs && m.dailyLogs[todayStr]) ? m.dailyLogs[todayStr] : 0;
 
                 let dailyLogsHtml = '';
                 if (m.dailyLogs && Object.keys(m.dailyLogs).length > 0) {
                     dailyLogsHtml = `<div class="daily-log-box"><h4>📅 Desglose Ventas Día a Día</h4>`;
                     let sortedDates = Object.keys(m.dailyLogs).sort().reverse();
-                    sortedDates.slice(0, 2).forEach(date => {
+                    // Muestra TODOS los días guardados con scroll vertical integrado
+                    sortedDates.forEach(date => {
                         let amount = m.dailyLogs[date];
                         dailyLogsHtml += `<div class="daily-log-row"><span>${date}</span> <b>$${amount.toLocaleString()} CLP</b></div>`;
                     });
@@ -978,7 +996,7 @@
 
             let fullLogsHtml = '';
             if (m.dailyLogs && Object.keys(m.dailyLogs).length > 0) {
-                fullLogsHtml = `<div class="daily-log-box" style="font-size:0.75rem;"><h4>📅 Historial Completo Desglose Día a Día</h4>`;
+                fullLogsHtml = `<div class="daily-log-box" style="max-height: 150px; font-size:0.75rem;"><h4>📅 Historial Completo Desglose Día a Día</h4>`;
                 Object.keys(m.dailyLogs).sort().reverse().forEach(date => {
                     fullLogsHtml += `<div class="daily-log-row"><span>${date}</span> <b>$${m.dailyLogs[date].toLocaleString()} CLP</b></div>`;
                 });
