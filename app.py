@@ -7,11 +7,13 @@ import time
 app = Flask(__name__)
 CORS(app)
 
-DATABASE_FILE = 'fleet_database.json'
+# 🛑 RUTA CRÍTICA BLINDADA: Apunta obligatoriamente al disco persistente en Render
+DATABASE_FILE = '/var/data/fleet_database.json'
 
 DEFAULT_DATABASE = {
     "dailyLedger": [],
-    "machines": []
+    "machines": [],
+    "auditLogs": []
 }
 
 def load_data():
@@ -19,24 +21,30 @@ def load_data():
         try:
             with open(DATABASE_FILE, 'r') as f:
                 data = json.load(f)
-                if isinstance(data, dict) and "machines" in data:
+                if isinstance(data, dict):
+                    if "machines" not in data: data["machines"] = []
+                    if "dailyLedger" not in data: data["dailyLedger"] = []
+                    if "auditLogs" not in data: data["auditLogs"] = []
                     return data
         except Exception as e:
-            print(f"⚠️ Error leyendo JSON: {e}")
+            print(f"⚠️ Error leyendo JSON persistente: {e}")
     
+    # Si el archivo no existe o falla, inicializa la estructura segura en el disco persistente
     save_data(DEFAULT_DATABASE)
     return DEFAULT_DATABASE
 
 def save_data(data):
     try:
+        # Asegura que el directorio /var/data/ exista antes de grabar
+        os.makedirs(os.path.dirname(DATABASE_FILE), exist_ok=True)
         with open(DATABASE_FILE, 'w') as f:
             json.dump(data, f, indent=4)
     except Exception as e:
-        print(f"⚠️ Error guardando JSON: {e}")
+        print(f"⚠️ Error crítico guardando en disco persistente: {e}")
 
 @app.route('/')
 def serve_index():
-    return send_file('index.html')
+    return "WinWin Telemetry API Online - Servidor Robusto"
 
 @app.route('/api/telemetry', methods=['POST'])
 def receive_telemetry():
@@ -65,16 +73,14 @@ def receive_telemetry():
     prize_status = str(data.get('prize', ''))
 
     db = load_data()
-    if "machines" not in db:
-        db["machines"] = []
-
+    
     machine = None
     for m in db["machines"]:
         if m.get("mac") == dev_id or m.get("device_id") == dev_id:
             machine = m
             break
 
-    # 🚀 AUTO-REGISTRO MASIVO INFINITO: Placas nuevas se registran solas al encender
+    # Auto-registro seguro para placas nuevas
     if not machine:
         machine = {
             "mac": dev_id,
@@ -117,13 +123,15 @@ def sync_fleet():
                 db = load_data()
                 incoming_machines = data.get("machines", [])
                 
-                # 🛡️ PROTECCIÓN ANTI-BORRADO: Evita sobrescribir con listas vacías por error al cargar
+                # 🛡️ ESCUDO ANTI-BORRADO ABSOLUTO EN SERVIDOR
                 if len(incoming_machines) == 0 and len(db.get("machines", [])) > 0:
-                    return jsonify({"status": "protected", "message": "Protegido contra borrado vacío"}), 200
+                    return jsonify({"status": "protected", "message": "Acción bloqueada: Intento de sobrescribir flota con array vacío"}), 200
 
                 db["machines"] = incoming_machines
                 if "dailyLedger" in data:
                     db["dailyLedger"] = data["dailyLedger"]
+                if "auditLogs" in data:
+                    db["auditLogs"] = data["auditLogs"]
                 
                 save_data(db)
                 return jsonify({"status": "success"}), 200
@@ -134,7 +142,7 @@ def sync_fleet():
         db = load_data()
         current_time = time.time()
         
-        # Evaluar en tiempo real si cada máquina está ONLINE u OFFLINE (margen de 35s)
+        # Evaluación estricta de conexión en tiempo real (35 segundos de margen)
         for m in db.get("machines", []):
             last_seen = m.get("last_seen", 0)
             if last_seen > 0 and (current_time - last_seen) <= 35:
