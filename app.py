@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import json
 import os
@@ -44,7 +44,8 @@ def save_data(data):
 
 @app.route('/')
 def serve_index():
-    return "WinWin Telemetry API Online - Servidor Robusto"
+    # Sirve correctamente tu archivo visual principal index.html
+    return send_from_directory('.', 'index.html')
 
 @app.route('/api/telemetry', methods=['POST'])
 def receive_telemetry():
@@ -80,7 +81,7 @@ def receive_telemetry():
             machine = m
             break
 
-    # Auto-registro seguro para placas nuevas
+    # Auto-registro seguro para placas nuevas al encender
     if not machine:
         machine = {
             "mac": dev_id,
