@@ -123,7 +123,6 @@
         .search-input { background: var(--card-bg); border: 1px solid var(--border-color); color: #fff; padding: 8px 12px; border-radius: 6px; width: 100%; font-size: 0.85rem; outline: none; }
         @media(min-width: 768px) { .search-input { width: 260px; } }
 
-        /* GRID COMPACTO PARA MUCHAS MÁQUINAS */
         .machines-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
         @media(min-width: 768px) { .machines-grid { grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 15px; } }
 
@@ -163,7 +162,7 @@
         .btn-delete { background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); }
         .btn-delete:hover { background: #ef4444; color: white; }
 
-        /* SECCIÓN HISTORIAL DIARIO EN MÁQUINA - SCROLL VERTICAL */
+        /* SECCIÓN HISTORIAL DIARIO EN MÁQUINA - SCROLL FIJO */
         .daily-log-box { 
             background: rgba(2, 6, 23, 0.5); 
             border: 1px solid #1e293b; 
@@ -222,7 +221,7 @@
         .edit-actions { display: flex; gap: 8px; margin-top: 15px; }
 
         /* MODAL DE AMPLIACIÓN / DETALLE DE MÁQUINA */
-        #detail-modal .edit-box { max-width: 650px; background: #0d1527; border: 2px solid var(--accent-blue); }
+        #detail-modal .edit-box { max-width: 650px; background: #0d1527; border: 2px solid var(--accent-blue); max-height: 85vh; overflow-y: auto; }
 
         /* MODAL DE INFORME TAMAÑO CARTA */
         #print-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 1000; justify-content: center; align-items: center; overflow-y: auto; padding: 10px; }
@@ -271,7 +270,7 @@
         <div class="card" style="border-left: 3px solid var(--accent-yellow);">
             <h3>Venta Total Día</h3>
             <div class="value" id="daily-sales">$0 CLP</div>
-            <div class="subtext">Automático 00:00 hrs</div>
+            <div class="subtext">Automático 00:00 hrs (Chile)</div>
         </div>
         <div class="card" style="border-left: 3px solid var(--accent-blue);">
             <h3>Caja Global (Físico)</h3>
@@ -549,6 +548,15 @@
             }
         }
 
+        // Función auxiliar para obtener la fecha local exacta de Chile (YYYY-MM-DD)
+        function getChileDateStr() {
+            let now = new Date();
+            let year = now.getFullYear();
+            let month = String(now.getMonth() + 1).padStart(2, '0');
+            let day = String(now.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
         // 🛡️ CARGA BLINDADA LOCAL CON VALIDACIÓN ANTI-WIPE
         function loadFromLocalStorage() {
             try {
@@ -689,14 +697,13 @@
             }).catch(e => console.log("Sincronización pendiente", e));
         }
 
-        // 🛡️️ SINCRONIZACIÓN ANTIBORRADO CON EL SERVIDOR NUBE
+        // 🛡️ SINCRONIZACIÓN ANTIBORRADO CON EL SERVIDOR NUBE
         async function fetchTelemetry() {
             try {
                 const response = await fetch('https://winwin-api-v2.onrender.com/api/sync-fleet', { signal: AbortSignal.timeout(5000) });
                 if(response.ok) {
                     const data = await response.json();
                     if(data && Array.isArray(data.machines)) {
-                        // Protección anti-wipe: si la nube responde con máquinas reales o local no tiene nada
                         if (data.machines.length > 0 || machines.length === 0) {
                             machines = data.machines;
                         }
@@ -716,12 +723,12 @@
 
         function updateUI() {
             let totalDaily = 0;
-            let totalBox = 0; // Caja global sumada por contadores reales
+            let totalBox = 0; 
             let totalPrizes = 0;
             let onlineCount = 0;
             let wifiSum = 0;
 
-            let todayStr = new Date().toISOString().slice(0, 10); 
+            let todayStr = getChileDateStr(); 
 
             machines.forEach(m => {
                 let prevSales = previousSalesState[m.mac] || 0;
@@ -751,11 +758,9 @@
                 let isOnline = m.is_online !== false;
                 if (isOnline) onlineCount++;
                 
-                // Venta estricta del día
                 let machineTodaySales = (m.dailyLogs && m.dailyLogs[todayStr]) ? m.dailyLogs[todayStr] : 0;
                 totalDaily += machineTodaySales;
 
-                // CAJA GLOBAL FÍSICA BASADA EN CONTADORES REALES
                 let cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
                 let telemetryPulses = Math.floor((m.sales || 0) / 100);
                 let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
@@ -855,7 +860,7 @@
                 return;
             }
 
-            let todayStr = new Date().toISOString().slice(0, 10);
+            let todayStr = getChileDateStr();
 
             let sortedList = [...listToRender].sort((a, b) => {
                 let salesA = (a.dailyLogs && a.dailyLogs[todayStr]) ? a.dailyLogs[todayStr] : 0;
@@ -947,7 +952,7 @@
                         <button class="btn-sm btn-pause" onclick="toggleMachine(${index})">${m.active !== false ? 'Pausar' : 'Activar'}</button>
                         <button class="btn-sm btn-danger" onclick="resetMachineBox(${index})">Vaciar Box</button>
                         <button class="btn-sm btn-report" onclick="openMachineReport(${index})">📄 Informe</button>
-                        <button class="btn-sm btn-delete" onclick="deleteMachine(${index})">🗑️️</button>
+                        <button class="btn-sm btn-delete" onclick="deleteMachine(${index})">🗑</button>
                     `;
                 } else {
                     actionsHtml = `
@@ -983,7 +988,7 @@
         function openDetailModal(index) {
             if (index === undefined || index < 0 || !machines[index]) return;
             let m = machines[index];
-            let todayStr = new Date().toISOString().slice(0, 10);
+            let todayStr = getChileDateStr();
             let machineTodaySales = (m.dailyLogs && m.dailyLogs[todayStr]) ? m.dailyLogs[todayStr] : 0;
 
             let cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
@@ -1001,6 +1006,23 @@
                 fullLogsHtml += `</div>`;
             }
 
+            // Historial de cierres guardados para reimpresión futura
+            let archiveHtml = '';
+            if (m.withdrawalHistory && m.withdrawalHistory.length > 0) {
+                archiveHtml = `<div class="daily-log-box" style="max-height: 150px; font-size:0.75rem; border-color:var(--accent-purple); margin-top:10px;"><h4>🖨️ Archivo de Cierres (Reimpresión)</h4>`;
+                m.withdrawalHistory.forEach((w, wIndex) => {
+                    archiveHtml += `
+                        <div class="daily-log-row" style="align-items:center; padding:4px 0;">
+                            <span>📅 ${w.date} <br><small style="color:var(--text-muted)">Op: ${w.operator}</small></span>
+                            <div style="display:flex; align-items:center; gap:6px;">
+                                <b>$${w.amount.toLocaleString()} CLP</b>
+                                <button class="btn-sm btn-report" style="padding:2px 6px; font-size:0.6rem;" onclick="reprintHistoricalClosure(${index}, ${wIndex})">🖨️ Ver / Imprimir</button>
+                            </div>
+                        </div>`;
+                });
+                archiveHtml += `</div>`;
+            }
+
             document.getElementById('detail-modal-content').innerHTML = `
                 <h2>🔍 Vista Ampliada: ${m.name}</h2>
                 <p style="font-size:0.75rem; color:var(--text-muted); margin-bottom:10px;">MAC: <code>${m.mac}</code> | Local: ${m.location}</p>
@@ -1009,6 +1031,7 @@
                     <p style="font-size:0.8rem; color:var(--accent-green);"><b>Caja Física Acumulada:</b> $${dineroRegistrado.toLocaleString()} CLP (${cDelta} monedas)</p>
                 </div>
                 ${fullLogsHtml}
+                ${archiveHtml}
                 <div class="edit-actions" style="margin-top: 15px;">
                     <button class="btn btn-secondary" onclick="closeDetailModal()">Cerrar Vista</button>
                 </div>
@@ -1190,7 +1213,8 @@
             let pFinal = pInit + pDelta;
             let observacion = prompt("Ingresa alguna observación del cierre:", "Cierre OK");
             if (!m.withdrawalHistory) m.withdrawalHistory = [];
-            m.withdrawalHistory.unshift({
+            
+            let closureRecord = {
                 date: new Date().toLocaleString(),
                 operator: operador,
                 amount: dineroRecaudado,
@@ -1199,7 +1223,10 @@
                 coinsDelta: cDelta,
                 prizesDelta: pDelta,
                 note: observacion || "Sin observaciones"
-            });
+            };
+
+            m.withdrawalHistory.unshift(closureRecord);
+
             m.coinInitial = cFinal;
             m.coinManualBase = undefined;
             m.prizeInitial = pFinal;
@@ -1257,66 +1284,105 @@
         function openMachineReport(index) {
             if (index === undefined || index < 0 || !machines[index]) return;
             const m = machines[index];
-            let lastClosure = (m.withdrawalHistory && m.withdrawalHistory.length > 0 && m.sales === 0) ? m.withdrawalHistory[0] : null;
+            renderReportModalContent(m);
+        }
+
+        // Función para renderizar el informe actual o reimprimir uno histórico
+        function renderReportModalContent(m, historicalClosure = null) {
             let cInit, cFinal, cDelta, dineroRegistrado;
-            if (lastClosure && lastClosure.coinInit !== undefined) {
-                cInit = lastClosure.coinInit;
-                cFinal = lastClosure.coinFinal;
-                cDelta = lastClosure.coinsDelta;
-                dineroRegistrado = lastClosure.amount;
+            
+            if (historicalClosure) {
+                cInit = historicalClosure.coinInit;
+                cFinal = historicalClosure.coinFinal;
+                cDelta = historicalClosure.coinsDelta;
+                dineroRegistrado = historicalClosure.amount;
             } else {
-                cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
-                let telemetryPulses = Math.floor((m.sales || 0) / 100);
-                cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
-                cDelta = Math.max(0, cFinal - cInit);
-                dineroRegistrado = cDelta * 100;
+                let lastClosure = (m.withdrawalHistory && m.withdrawalHistory.length > 0 && m.sales === 0) ? m.withdrawalHistory[0] : null;
+                if (lastClosure && lastClosure.coinInit !== undefined) {
+                    cInit = lastClosure.coinInit;
+                    cFinal = lastClosure.coinFinal;
+                    cDelta = lastClosure.coinsDelta;
+                    dineroRegistrado = lastClosure.amount;
+                } else {
+                    cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
+                    let telemetryPulses = Math.floor((m.sales || 0) / 100);
+                    cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
+                    cDelta = Math.max(0, cFinal - cInit);
+                    dineroRegistrado = cDelta * 100;
+                }
             }
+
             let pInit = m.prizeInitial !== undefined ? m.prizeInitial : 1164;
-            let pDelta = (lastClosure && lastClosure.prizesDelta !== undefined) ? lastClosure.prizesDelta : (m.prizes || 0);
+            let pDelta = historicalClosure ? (historicalClosure.prizesDelta || 0) : (m.prizes || 0);
             let pFinal = pInit + pDelta;
 
+            let badgeTitleSuffix = historicalClosure ? ` (REIMPRESIÓN CIERRE: ${historicalClosure.date})` : '';
+
             if (currentRole === 'cliente') {
-                document.getElementById('report-title').innerText = `REPORTE DE TRANSPARENCIA - ${m.name.toUpperCase()}`;
-                document.getElementById('report-date').innerText = `Fecha: ${new Date().toLocaleString()}`;
+                document.getElementById('report-title').innerText = `REPORTE DE TRANSPARENCIA - ${m.name.toUpperCase()}${badgeTitleSuffix}`;
+                document.getElementById('report-date').innerText = `Fecha de Emisión: ${new Date().toLocaleString()}`;
                 document.getElementById('report-content-body').innerHTML = `
                     <div style="margin-bottom: 15px; font-size: 0.85rem; background: #f8fafc; padding: 12px; border-radius: 6px; border: 1px solid #e2e8f0;">
                         <p><b>Ubicación:</b> ${m.location || 'Local Principal'}</p>
-                        <p><b>Estado:</b> <span style="color: #10b981; font-weight:bold;">Operativo</span></p>
+                        <p><b>Estado del Terminal:</b> <span style="color: #10b981; font-weight:bold;">Operativo</span></p>
                     </div>
-                    <p style="font-weight: bold; margin-bottom: 6px;">📊 Contador de Monedas:</p>
+                    <p style="font-weight: bold; margin-bottom: 6px;">📊 Auditoría de Entradas (Contador Mecánico):</p>
                     <table class="letter-table" style="margin-bottom: 15px;">
-                        <thead><tr><th>Concepto</th><th>Valor</th></tr></thead>
+                        <thead><tr><th>Concepto</th><th>Lectura / Valor</th></tr></thead>
                         <tbody>
-                            <tr><td>Contador Inicial</td><td>${cInit} un.</td></tr>
-                            <tr><td>Contador Final</td><td>${cFinal} un.</td></tr>
-                            <tr><td><b>Total Monedas (Delta)</b></td><td><b>${cDelta} un.</b></td></tr>
+                            <tr><td><b>Contador Inicial</b></td><td>${cInit} un.</td></tr>
+                            <tr><td><b>Contador Final</b></td><td>${cFinal} un.</td></tr>
+                            <tr><td><b>Total Monedas Registradas (Delta)</b></td><td><b>${cDelta} un.</b></td></tr>
                         </tbody>
                     </table>
-                    <p style="font-weight: bold; margin-bottom: 6px;">💵 Dinero Registrado: <span style="color:#059669;">$${dineroRegistrado.toLocaleString()} CLP</span></p>
+                    <p style="font-weight: bold; margin-bottom: 6px;">💵 Dinero Registrado:</p>
+                    <table class="letter-table">
+                        <thead><tr><th>Descripción</th><th>Monto Total</th></tr></thead>
+                        <tbody>
+                            <tr><td><b>Total Ingresado (${cDelta} monedas × $100)</b></td><td style="font-size: 1.1rem; color: #059669; font-weight: bold;">$${dineroRegistrado.toLocaleString()} CLP</td></tr>
+                        </tbody>
+                    </table>
                 `;
             } else {
-                document.getElementById('report-title').innerText = `INFORME FINANCIERO - ${m.name.toUpperCase()}`;
+                document.getElementById('report-title').innerText = `INFORME FINANCIERO - ${m.name.toUpperCase()}${badgeTitleSuffix}`;
                 document.getElementById('report-date').innerText = `Emisión: ${new Date().toLocaleString()}`;
+                
                 let withdrawalsHtml = '';
                 if(m.withdrawalHistory && m.withdrawalHistory.length > 0) {
                     m.withdrawalHistory.forEach(w => {
-                        withdrawalsHtml += `<tr><td>${w.date}</td><td><b>${w.operator}</b></td><td>$${w.amount.toLocaleString()} CLP</td><td>${w.note}</td></tr>`;
+                        let detalleMonedas = (w.coinsDelta !== undefined) ? ` (${w.coinsDelta} mon. / ${w.prizesDelta || 0} prem.)` : '';
+                        withdrawalsHtml += `<tr><td>${w.date}</td><td><b>${w.operator}</b></td><td>$${w.amount.toLocaleString()} CLP${detalleMonedas}</td><td>${w.note}</td></tr>`;
                     });
                 } else {
                     withdrawalsHtml = `<tr><td colspan="4" style="text-align:center;">Sin cierres aún.</td></tr>`;
                 }
+
                 document.getElementById('report-content-body').innerHTML = `
-                    <div style="margin-bottom: 12px; font-size: 0.8rem;">
+                    <div style="margin-bottom: 12px; font-size: 0.8rem; line-height: 1.4;">
                         <p><b>MAC:</b> <code>${m.mac}</code></p>
-                        <p><b>Ubicación:</b> ${m.location}</p>
+                        <p><b>Ubicación:</b> ${m.location || 'Local por definir'}</p>
+                        <p><b>Contador Monedas (Inicio ➔ Final):</b> ${cInit} ➔ ${cFinal} (Delta: ${cDelta} un. | $${dineroRegistrado.toLocaleString()} CLP)</p>
+                        <p><b>Contador Premios (Inicio ➔ Final):</b> ${pInit} ➔ ${pFinal} (Entregados: ${pDelta} un.)</p>
                     </div>
-                    <table class="letter-table">
-                        <thead><tr><th>Fecha</th><th>Responsable</th><th>Monto</th><th>Obs</th></tr></thead>
+                    <p><b>💵 Historial de Cierres de Caja y Auditoría:</b></p>
+                    <table class="letter-table" style="margin-top:5px; margin-bottom:15px;">
+                        <thead><tr><th>Fecha y Hora</th><th>Responsable</th><th>Monto Recaudado</th><th>Observación</th></tr></thead>
                         <tbody>${withdrawalsHtml}</tbody>
                     </table>
                 `;
             }
+
             document.getElementById('print-modal').style.display = 'flex';
+        }
+
+        // Función para disparar la reimpresión desde el archivo histórico del modal de detalle
+        function reprintHistoricalClosure(machineIndex, closureIndex) {
+            let m = machines[machineIndex];
+            if (m && m.withdrawalHistory && m.withdrawalHistory[closureIndex]) {
+                let targetClosure = m.withdrawalHistory[closureIndex];
+                closeDetailModal();
+                renderReportModalContent(m, targetClosure);
+            }
         }
 
         function openGlobalReport() {
