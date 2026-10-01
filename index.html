@@ -274,15 +274,16 @@
             <div class="value" id="box-total">$0 CLP</div>
             <div class="subtext">Acumulado hasta retiro</div>
         </div>
+        <!-- VISOR COMERCIAL DE VENTA PROMEDIO / MÁQUINA (RANGO EQUILIBRADO INTERMEDIO) -->
+        <div class="card" id="avg-performance-card" style="border-left: 3px solid var(--accent-green);">
+            <h3>Venta Promedio / Máquina</h3>
+            <div class="value" id="avg-machine-sales">$0 CLP</div>
+            <div class="subtext" id="avg-machine-status" style="color: var(--accent-green);">Calculando...</div>
+        </div>
         <div class="card gerencia-only" style="border-left: 3px solid var(--accent-purple);">
             <h3>Premios Totales Flota</h3>
             <div class="value" id="total-prizes">0 un.</div>
             <div class="subtext">Registro Manual (Físico)</div>
-        </div>
-        <div class="card">
-            <h3>Señal Wi-Fi Promedio</h3>
-            <div class="value" id="wifi-signal">0 dBm</div>
-            <div class="subtext">Estabilidad</div>
         </div>
         <div class="card gerencia-only" style="border-left: 3px solid var(--accent-green);">
             <h3>Eficiencia Flota</h3>
@@ -546,7 +547,7 @@
             }
         }
 
-        // 🚨 ALARMA ACÚSTICA CATEGÓRICA, NOTORIA Y DIFERENCIADA PARA ONLINE / OFFLINE Y CAMBIO DE ESTADO
+        // 🚨 ALARMA ACÚSTICA CATEGÓRICA, NOTORIA Y DIFERENCIADA PARA ONLINE / OFFLINE
         function playAlertAlarmSound(isOnline) {
             if (!soundEnabled) return;
             try {
@@ -557,7 +558,6 @@
                 const now = audioCtx.currentTime;
                 
                 if (isOnline) {
-                    // 🟢 SONIDO ONLINE: Doble tono agudo y limpio (Bip-Bip de éxito)
                     [1046.50, 1318.51].forEach((freq, i) => {
                         let osc = audioCtx.createOscillator();
                         let gain = audioCtx.createGain();
@@ -571,11 +571,10 @@
                         osc.stop(now + (i * 0.12) + 0.1);
                     });
                 } else {
-                    // 🔴 SONIDO OFFLINE / ALERTA CRÍTICA: Doble tono grave y cortante (Sirena de atención)
                     [330.00, 220.00].forEach((freq, i) => {
                         let osc = audioCtx.createOscillator();
                         let gain = audioCtx.createGain();
-                        osc.type = 'sawtooth'; // Sonido más rasposo y notorio
+                        osc.type = 'sawtooth';
                         osc.frequency.setValueAtTime(freq, now + (i * 0.18));
                         gain.gain.setValueAtTime(0.5, now + (i * 0.18));
                         gain.gain.exponentialRampToValueAtTime(0.001, now + (i * 0.18) + 0.15);
@@ -698,36 +697,6 @@
             return html;
         }
 
-        function getWifiDetails(dBm) {
-            let val = dBm || -50;
-            if (val >= -55) return { label: 'Excelente', color: '#10b981', level: 4 };
-            if (val >= -65) return { label: 'Muy buena', color: '#34d399', level: 3 };
-            if (val >= -75) return { label: 'Buena', color: '#3b82f6', level: 2 };
-            if (val >= -85) return { label: 'Regular', color: '#f59e0b', level: 1 };
-            if (val >= -95) return { label: 'Débil', color: '#f97316', level: 0.5 };
-            return { label: 'Nula', color: '#ef4444', level: 0 };
-        }
-
-        function formatWifiVisual(dBm) {
-            let info = getWifiDetails(dBm);
-            let activeBars = info.level === 4 ? 4 : (info.level === 3 ? 3 : (info.level === 2 ? 2 : (info.level === 1 ? 1 : (info.level === 0.5 ? 1 : 0))));
-            let html = `
-                <div class="wifi-visual-container">
-                    <div class="wifi-header-row">
-                        <span style="color: ${info.color}; font-weight: 800;">${info.label}</span>
-                        <span style="font-size: 0.65rem; color: var(--text-muted);">${dBm || -50} dBm</span>
-                    </div>
-                    <div class="wifi-bars">
-                        <div class="wifi-bar" style="background: ${activeBars >= 1 ? info.color : 'rgba(255,255,255,0.15)'}; height: 4px;"></div>
-                        <div class="wifi-bar" style="background: ${activeBars >= 2 ? info.color : 'rgba(255,255,255,0.15)'}; height: 7px;"></div>
-                        <div class="wifi-bar" style="background: ${activeBars >= 3 ? info.color : 'rgba(255,255,255,0.15)'}; height: 10px;"></div>
-                        <div class="wifi-bar" style="background: ${activeBars >= 4 ? info.color : 'rgba(255,255,255,0.15)'}; height: 14px;"></div>
-                    </div>
-                </div>
-            `;
-            return html;
-        }
-
         function saveStateAndSync() {
             saveToLocalStorage();
             fetch('https://winwin-api-v2.onrender.com/api/sync-fleet', {
@@ -748,7 +717,7 @@
                             let oldOnline = previousOnlineState[newM.mac];
                             let currentOnline = newM.is_online !== false;
                             if (oldOnline !== undefined && oldOnline !== currentOnline) {
-                                playAlertAlarmSound(currentOnline); // 🔊 Dispara alarma fuerte ONLINE / OFFLINE
+                                playAlertAlarmSound(currentOnline);
                             }
                             previousOnlineState[newM.mac] = currentOnline;
                         });
@@ -775,7 +744,6 @@
             let totalBox = 0; 
             let totalPrizes = 0;
             let onlineCount = 0;
-            let wifiSum = 0;
 
             let todayStr = getChileDateStr(); 
 
@@ -825,19 +793,52 @@
 
                 let pDelta = m.prizes || 0;
                 totalPrizes += pDelta;
-                wifiSum += (m.wifi || -50);
             });
 
             updateDailyLedgerArchive(totalDaily, totalPrizes, todayStr);
 
-            let avgWifi = machines.length > 0 ? Math.round(wifiSum / machines.length) : 0;
-            let efficiency = totalPrizes > 0 ? Math.min(100, Math.round((totalPrizes * 500 / (totalDaily || 1)) * 100)) : 0;
+            // CÁLCULO DE VENTA PROMEDIO / MÁQUINA (RANGOS INTERMEDIOS EQUILIBRADOS)
+            let avgPerMachine = machines.length > 0 ? totalDaily / machines.length : 0;
+            let avgStatusText = "";
+            let avgStatusColor = "";
+            let avgBorderColor = "";
+
+            if (avgPerMachine > 15000) {
+                avgStatusText = "👑 EXCELENTE (> $15k)";
+                avgStatusColor = "#10b981";
+                avgBorderColor = "#10b981";
+            } else if (avgPerMachine >= 10000) {
+                avgStatusText = "⚡ MUY BUENO ($10k - $15k)";
+                avgStatusColor = "#3b82f6";
+                avgBorderColor = "#3b82f6";
+            } else if (avgPerMachine >= 6000) {
+                avgStatusText = "⚠️ REGULAR ($6k - $9.9k)";
+                avgStatusColor = "#f59e0b";
+                avgBorderColor = "#f59e0b";
+            } else {
+                avgStatusText = "🚨 BAJO / CRÍTICO (< $6k)";
+                avgStatusColor = "#ef4444";
+                avgBorderColor = "#ef4444";
+            }
 
             document.getElementById('daily-sales').innerText = `$${totalDaily.toLocaleString()} CLP`;
             document.getElementById('box-total').innerText = `$${totalBox.toLocaleString()} CLP`;
             document.getElementById('total-prizes').innerText = `${totalPrizes} un.`;
             document.getElementById('active-terminals').innerText = onlineCount;
-            document.getElementById('wifi-signal').innerText = `${avgWifi} dBm`;
+            
+            // Actualizar tarjeta superior de Venta Promedio / Máquina con rangos equilibrados
+            document.getElementById('avg-machine-sales').innerText = `$${Math.round(avgPerMachine).toLocaleString()} CLP`;
+            let statusEl = document.getElementById('avg-machine-status');
+            if(statusEl) {
+                statusEl.innerText = avgStatusText;
+                statusEl.style.color = avgStatusColor;
+            }
+            let cardEl = document.getElementById('avg-performance-card');
+            if(cardEl) {
+                cardEl.style.borderLeft = `3px solid ${avgBorderColor}`;
+            }
+
+            let efficiency = totalPrizes > 0 ? Math.min(100, Math.round((totalPrizes * 500 / (totalDaily || 1)) * 100)) : 0;
             document.getElementById('fleet-efficiency').innerText = `${efficiency}%`;
 
             salesChart.data.datasets[0].data[6] = totalDaily;
@@ -984,11 +985,7 @@
                         </div>
                         ${formatMechanicalCounter(cFinal)}
                     </div>
-                    <div class="stat-box">
-                        <span>SEÑAL WI-FI</span>
-                        ${formatWifiVisual(m.wifi)}
-                    </div>
-                    <div style="grid-column: 1 / -1;">
+                    <div class="stat-box" style="grid-column: 1 / -1;">
                         ${dailyLogsHtml}
                     </div>
                 `;
@@ -1282,7 +1279,7 @@
             m.sales = 0;
             m.box = 0;
             m.lastSalesCount = 0;
-            playAlertAlarmSound(true); // 🔊 Sonido de éxito al vaciar caja
+            playAlertAlarmSound(true);
             logAuditEvent("CIERRE DE CAJA INDIVIDUAL", m.name, operador, `Recaudado: $${dineroRecaudado.toLocaleString()} CLP`);
             updateUI();
             alert(`✅ Cierre registrado con éxito.`);
@@ -1292,7 +1289,7 @@
             if (index === undefined || index < 0 || !machines[index]) return;
             machines[index].active = !machines[index].active;
             let statusStr = machines[index].active ? "Activada" : "Pausada";
-            playAlertAlarmSound(machines[index].active); // 🔊 Sonido categórico al pausar/activar
+            playAlertAlarmSound(machines[index].active);
             logAuditEvent("CAMBIO DE ESTADO", machines[index].name, null, `Máquina ${statusStr}`);
             updateUI();
         }
@@ -1457,7 +1454,7 @@
                 let cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
                 let telemetryPulses = Math.floor((m.sales || 0) / 100);
                 let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
-                    let cDelta = Math.max(0, cFinal - cInit);
+                let cDelta = Math.max(0, cFinal - cInit);
                 let recMachine = cDelta * 100;
                 totalRecaudado += recMachine;
                 tableRows += `<tr><td><b>${m.name}</b></td><td>$${recMachine.toLocaleString()}</td><td>${m.active ? 'Activa' : 'Pausada'}</td></tr>`;
