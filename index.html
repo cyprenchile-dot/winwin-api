@@ -1057,14 +1057,14 @@
 
             let archiveHtml = '';
             if (m.withdrawalHistory && m.withdrawalHistory.length > 0) {
-                archiveHtml = `<div class="daily-log-box" style="max-height: 150px; font-size:0.75rem; border-color:var(--accent-purple); margin-top:10px;"><h4>🖨️ Comprobantes Individuales de Cierres</h4>`;
+                archiveHtml = `<div class="daily-log-box" style="max-height: 150px; font-size:0.75rem; border-color:var(--accent-purple); margin-top:10px;"><h4>🖨️ Comprobantes Individuales por Operador</h4>`;
                 m.withdrawalHistory.forEach((w, wIndex) => {
                     archiveHtml += `
                         <div class="daily-log-row" style="align-items:center; padding:4px 0;">
-                            <span>📅 ${w.date} <br><small style="color:var(--text-muted)">Op: ${w.operator}</small></span>
+                            <span>📅 ${w.date} <br><small style="color:var(--text-muted)">Operador: <b>${w.operator}</b></small></span>
                             <div style="display:flex; align-items:center; gap:6px;">
                                 <b>$${w.amount.toLocaleString()} CLP</b>
-                                <button class="btn-sm btn-report" style="padding:2px 6px; font-size:0.6rem;" onclick="reprintHistoricalClosure(${index}, ${wIndex})">🖨️ Imprimir Este Cierre</button>
+                                <button class="btn-sm btn-report" style="padding:2px 6px; font-size:0.6rem;" onclick="openIndividualClosureReport(${index}, ${wIndex})">🖨️ Ver Cierre Individual</button>
                             </div>
                         </div>`;
                 });
@@ -1332,24 +1332,29 @@
         function openMachineReport(index) {
             if (index === undefined || index < 0 || !machines[index]) return;
             const m = machines[index];
-            renderReportModalContent(m);
+            renderReportModalContent(m, null);
         }
 
-        // RENDERIZADO DE INFORME: Si recibe historicalClosure, muestra SOLO ese recibo individual listo para imprimir
+        // FUNCIÓN CLAVE: Abre el comprobante 100% INDIVIDUAL del operador seleccionado (Daniel, Piero, etc.)
+        function openIndividualClosureReport(machineIndex, closureIndex) {
+            let m = machines[machineIndex];
+            if (m && m.withdrawalHistory && m.withdrawalHistory[closureIndex]) {
+                let targetClosure = m.withdrawalHistory[closureIndex];
+                closeDetailModal();
+                renderReportModalContent(m, targetClosure);
+            }
+        }
+
+        // MOTOR DE RENDERIZADO DE INFORMES (General vs Comprobante Individual)
         function renderReportModalContent(m, historicalClosure = null) {
-            let cInit, cFinal, cDelta, dineroRegistrado, operadorCierre, fechaCierre, notaCierre;
-            
+            let cInit, cFinal, cDelta, dineroRegistrado;
+
             if (historicalClosure) {
-                // Modo Comprobante Individual de un Cierre Pasado
                 cInit = historicalClosure.coinInit;
                 cFinal = historicalClosure.coinFinal;
                 cDelta = historicalClosure.coinsDelta;
                 dineroRegistrado = historicalClosure.amount;
-                operadorCierre = historicalClosure.operator;
-                fechaCierre = historicalClosure.date;
-                notaCierre = historicalClosure.note;
             } else {
-                // Modo Informe Actual de la Máquina (Tabla completa)
                 let lastClosure = (m.withdrawalHistory && m.withdrawalHistory.length > 0 && m.sales === 0) ? m.withdrawalHistory[0] : null;
                 if (lastClosure && lastClosure.coinInit !== undefined) {
                     cInit = lastClosure.coinInit;
@@ -1370,29 +1375,29 @@
             let pFinal = pInit + pDelta;
 
             if (historicalClosure) {
-                // --- COMPROBANTE DE CIERRE INDIVIDUAL (Ideal para imprimir solo el de Daniel o Piero) ---
-                document.getElementById('report-title').innerText = `COMPROBANTE DE CIERRE INDIVIDUAL - ${m.name.toUpperCase()}`;
-                document.getElementById('report-date').innerText = `Fecha del Turno / Cierre: ${fechaCierre}`;
+                // --- VISTA EXCLUSIVA DE COMPROBANTE INDIVIDUAL (DANIEL / PIERO) ---
+                document.getElementById('report-title').innerText = `COMPROBANTE DE CIERRE - ${m.name.toUpperCase()}`;
+                document.getElementById('report-date').innerText = `Fecha y Hora del Turno: ${historicalClosure.date}`;
                 document.getElementById('report-content-body').innerHTML = `
-                    <div style="margin-bottom: 15px; font-size: 0.85rem; background: #f8fafc; padding: 12px; border-radius: 6px; border: 1px solid #e2e8f0;">
-                        <p><b>Terminal:</b> ${m.name} (MAC: <code>${m.mac}</code>)</p>
-                        <p><b>Ubicación:</b> ${m.location || 'Local Principal'}</p>
-                        <p><b>Operador Responsable:</b> <span style="color: #2563eb; font-weight:bold;">${operadorCierre}</span></p>
-                        <p><b>Observación del Cierre:</b> ${notaCierre}</p>
+                    <div style="margin-bottom: 15px; font-size: 0.85rem; background: #f8fafc; padding: 12px; border-radius: 6px; border: 1px solid #e2e8f0; color:#000;">
+                        <p><b>Terminal:</b> ${m.name}</p>
+                        <p><b>Ubicación del Local:</b> ${m.location || 'Local Principal'}</p>
+                        <p><b>Operador Responsable del Turno:</b> <span style="color: #2563eb; font-weight:bold; font-size:0.95rem;">${historicalClosure.operator}</span></p>
+                        <p><b>Observación Registrada:</b> ${historicalClosure.note}</p>
                     </div>
-                    <p style="font-weight: bold; margin-bottom: 6px;">📊 Auditoría Mecánica de Monedas:</p>
+                    <p style="font-weight: bold; margin-bottom: 6px; color:#000;">📊 Auditoría de Monedas en este Cierre:</p>
                     <table class="letter-table" style="margin-bottom: 15px;">
-                        <thead><tr><th>Concepto</th><th>Valor Registrado</th></tr></thead>
+                        <thead><tr><th>Concepto</th><th>Lectura Mecánica</th></tr></thead>
                         <tbody>
-                            <tr><td>Contador Inicial (Inicio Turno)</td><td>${cInit} un.</td></tr>
-                            <tr><td>Contador Final (Cierre Turno)</td><td>${cFinal} un.</td></tr>
-                            <tr><td><b>Total Monedas Recogidas (Delta)</b></td><td><b>${cDelta} un.</b></td></tr>
-                            <tr><td><b>Premios Entregados</b></td><td><b>${historicalClosure.prizesDelta || 0} un.</b></td></tr>
+                            <tr><td>Contador Inicial (Inicio de Turno)</td><td>${cInit} un.</td></tr>
+                            <tr><td>Contador Final (Corte de Turno)</td><td>${cFinal} un.</td></tr>
+                            <tr><td><b>Total Monedas Ingresadas (Delta)</b></td><td><b>${cDelta} un.</b></td></tr>
+                            <tr><td><b>Premios Entregados en Turno</b></td><td><b>${historicalClosure.prizesDelta || 0} un.</b></td></tr>
                         </tbody>
                     </table>
-                    <p style="font-weight: bold; margin-bottom: 6px;">💵 Liquidación de Efectivo:</p>
+                    <p style="font-weight: bold; margin-bottom: 6px; color:#000;">💵 Liquidación de Efectivo de este Turno:</p>
                     <table class="letter-table">
-                        <thead><tr><th>Descripción del Retiro</th><th>Monto Líquido Liquidado</th></tr></thead>
+                        <thead><tr><th>Detalle de Recaudación</th><th>Monto Líquido</th></tr></thead>
                         <tbody>
                             <tr>
                                 <td><b>Total Recaudado (${cDelta} monedas × $100)</b></td>
@@ -1402,34 +1407,28 @@
                     </table>
                 `;
             } else {
-                // --- INFORME GENERAL / FINANCIERO DE LA MÁQUINA ---
+                // --- VISTA GENERAL DE LA MÁQUINA (Tabla completa de todos los cierres) ---
                 if (currentRole === 'cliente') {
                     document.getElementById('report-title').innerText = `REPORTE DE TRANSPARENCIA - ${m.name.toUpperCase()}`;
                     document.getElementById('report-date').innerText = `Fecha de Emisión: ${new Date().toLocaleString()}`;
                     document.getElementById('report-content-body').innerHTML = `
-                        <div style="margin-bottom: 15px; font-size: 0.85rem; background: #f8fafc; padding: 12px; border-radius: 6px; border: 1px solid #e2e8f0;">
+                        <div style="margin-bottom: 15px; font-size: 0.85rem; background: #f8fafc; padding: 12px; border-radius: 6px; border: 1px solid #e2e8f0; color:#000;">
                             <p><b>Ubicación:</b> ${m.location || 'Local Principal'}</p>
                             <p><b>Estado del Terminal:</b> <span style="color: #10b981; font-weight:bold;">Operativo</span></p>
                         </div>
-                        <p style="font-weight: bold; margin-bottom: 6px;">📊 Auditoría de Entradas (Contador Mecánico):</p>
+                        <p style="font-weight: bold; margin-bottom: 6px; color:#000;">📊 Auditoría de Entradas:</p>
                         <table class="letter-table" style="margin-bottom: 15px;">
-                            <thead><tr><th>Concepto</th><th>Lectura / Valor</th></tr></thead>
+                            <thead><tr><th>Concepto</th><th>Valor</th></tr></thead>
                             <tbody>
-                                <tr><td><b>Contador Inicial</b></td><td>${cInit} un.</td></tr>
-                                <tr><td><b>Contador Final</b></td><td>${cFinal} un.</td></tr>
-                                <tr><td><b>Total Monedas Registradas (Delta)</b></td><td><b>${cDelta} un.</b></td></tr>
+                                <tr><td>Contador Inicial</td><td>${cInit} un.</td></tr>
+                                <tr><td>Contador Final</td><td>${cFinal} un.</td></tr>
+                                <tr><td><b>Total Monedas (Delta)</b></td><td><b>${cDelta} un.</b></td></tr>
                             </tbody>
                         </table>
-                        <p style="font-weight: bold; margin-bottom: 6px;">💵 Dinero Registrado:</p>
-                        <table class="letter-table">
-                            <thead><tr><th>Descripción</th><th>Monto Total</th></tr></thead>
-                            <tbody>
-                                <tr><td><b>Total Ingresado (${cDelta} monedas × $100)</b></td><td style="font-size: 1.1rem; color: #059669; font-weight: bold;">$${dineroRegistrado.toLocaleString()} CLP</td></tr>
-                            </tbody>
-                        </table>
+                        <p style="font-weight: bold; margin-bottom: 6px; color:#000;">💵 Dinero Registrado: <span style="color:#059669;">$${dineroRegistrado.toLocaleString()} CLP</span></p>
                     `;
                 } else {
-                    document.getElementById('report-title').innerText = `INFORME FINANCIERO - ${m.name.toUpperCase()}`;
+                    document.getElementById('report-title').innerText = `INFORME FINANCIERO GENERAL - ${m.name.toUpperCase()}`;
                     document.getElementById('report-date').innerText = `Emisión: ${new Date().toLocaleString()}`;
                     
                     let withdrawalsHtml = '';
@@ -1443,13 +1442,13 @@
                     }
 
                     document.getElementById('report-content-body').innerHTML = `
-                        <div style="margin-bottom: 12px; font-size: 0.8rem; line-height: 1.4;">
+                        <div style="margin-bottom: 12px; font-size: 0.8rem; line-height: 1.4; color:#000;">
                             <p><b>MAC:</b> <code>${m.mac}</code></p>
                             <p><b>Ubicación:</b> ${m.location || 'Local por definir'}</p>
                             <p><b>Contador Monedas (Inicio ➔ Final):</b> ${cInit} ➔ ${cFinal} (Delta: ${cDelta} un. | $${dineroRegistrado.toLocaleString()} CLP)</p>
                             <p><b>Contador Premios (Inicio ➔ Final):</b> ${pInit} ➔ ${pFinal} (Entregados: ${pDelta} un.)</p>
                         </div>
-                        <p><b>💵 Historial de Cierres de Caja y Auditoría:</b></p>
+                        <p style="color:#000; font-weight:bold;">💵 Historial Completo de Cierres de Caja:</p>
                         <table class="letter-table" style="margin-top:5px; margin-bottom:15px;">
                             <thead><tr><th>Fecha y Hora</th><th>Responsable</th><th>Monto Recaudado</th><th>Observación</th></tr></thead>
                             <tbody>${withdrawalsHtml}</tbody>
@@ -1459,16 +1458,6 @@
             }
 
             document.getElementById('print-modal').style.display = 'flex';
-        }
-
-        // Función para abrir el comprobante individual de un cierre específico hecho por Daniel, Piero, etc.
-        function reprintHistoricalClosure(machineIndex, closureIndex) {
-            let m = machines[machineIndex];
-            if (m && m.withdrawalHistory && m.withdrawalHistory[closureIndex]) {
-                let targetClosure = m.withdrawalHistory[closureIndex];
-                closeDetailModal();
-                renderReportModalContent(m, targetClosure);
-            }
         }
 
         function openGlobalReport() {
@@ -1487,7 +1476,7 @@
                 tableRows += `<tr><td><b>${m.name}</b></td><td>$${recMachine.toLocaleString()}</td><td>${m.active ? 'Activa' : 'Pausada'}</td></tr>`;
             });
             document.getElementById('report-content-body').innerHTML = `
-                <p><b>Recaudación Total Flota:</b> $${totalRecaudado.toLocaleString()} CLP</p>
+                <p style="color:#000;"><b>Recaudación Total Flota:</b> $${totalRecaudado.toLocaleString()} CLP</p>
                 <table class="letter-table" style="margin-top:10px;">
                     <thead><tr><th>Máquina</th><th>Recaudación</th><th>Estado</th></tr></thead>
                     <tbody>${tableRows}</tbody>
