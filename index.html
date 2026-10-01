@@ -428,9 +428,8 @@
                 <div style="border-top: 1px solid #333; width: 150px; padding-top: 6px;">Firma Administrador</div>
                 <div style="border-top: 1px solid #333; width: 150px; padding-top: 6px;">Firma Locatario / Cliente</div>
             </div>
-            <div style="text-align: center; margin-top: 20px; display: flex; gap: 10px; justify-content: center;">
+            <div style="text-align: center; margin-top: 20px;">
                 <button class="btn" onclick="window.print()" style="background: #000; color: #fff; padding: 8px 16px; font-size: 0.8rem;">🖨️ Imprimir / Guardar PDF</button>
-                <button class="btn btn-secondary" onclick="downloadIndividualReportTxt()" style="padding: 8px 16px; font-size: 0.8rem;">📥 Descargar TXT / Resumen</button>
             </div>
         </div>
     </div>
@@ -469,7 +468,7 @@
         let dailyLedger = [];
         let auditLogs = []; 
         let previousSalesState = {}; 
-        let previousOnlineState = {}; // RASTREO PARA ALARMAS DE CONEXIÓN
+        let previousOnlineState = {}; 
         let fleetMap = null;
         let fleetMarkers = [];
         let editMap = null;
@@ -499,7 +498,6 @@
             }
         }
 
-        // Sonido de monedas cayendo
         function playCoinDropSound() {
             if (!soundEnabled) return;
             try {
@@ -548,7 +546,6 @@
             }
         }
 
-        // 🚨 ALARMA SONORA DE CONEXIÓN / DESCONEXIÓN (BEEP DE ALERTA)
         function playAlertAlarmSound(isOnline) {
             if (!soundEnabled) return;
             try {
@@ -562,13 +559,11 @@
 
                 osc.type = 'sine';
                 if (isOnline) {
-                    // Tono alegre ascendente al conectar
-                    osc.frequency.setValueAtTime(587.33, now); // D5
-                    osc.frequency.setValueAtTime(880.00, now + 0.1); // A5
+                    osc.frequency.setValueAtTime(587.33, now); 
+                    osc.frequency.setValueAtTime(880.00, now + 0.1); 
                 } else {
-                    // Tono de alerta descendente al desconectar
-                    osc.frequency.setValueAtTime(440.00, now); // A4
-                    osc.frequency.setValueAtTime(220.00, now + 0.15); // A3
+                    osc.frequency.setValueAtTime(440.00, now); 
+                    osc.frequency.setValueAtTime(220.00, now + 0.15); 
                 }
 
                 gain.gain.setValueAtTime(0.3, now);
@@ -737,7 +732,6 @@
                     const data = await response.json();
                     if(data && Array.isArray(data.machines)) {
                         
-                        // Control de alarmas ante cambios de estado ONLINE / OFFLINE
                         data.machines.forEach(newM => {
                             let oldOnline = previousOnlineState[newM.mac];
                             let currentOnline = newM.is_online !== false;
@@ -817,7 +811,6 @@
                 wifiSum += (m.wifi || -50);
             });
 
-            // BITÁCORA AUTOMÁTICA DE REGISTROS DIARIOS (CONSOLIDADOR)
             updateDailyLedgerArchive(totalDaily, totalPrizes, todayStr);
 
             let avgWifi = machines.length > 0 ? Math.round(wifiSum / machines.length) : 0;
@@ -839,7 +832,6 @@
             updateFleetMapMarkers(machines);
         }
 
-        // Consolidador de bitácora diaria automática
         function updateDailyLedgerArchive(totalDaily, totalPrizes, todayStr) {
             if (!dailyLedger) dailyLedger = [];
             let existingEntry = dailyLedger.find(item => item.date === todayStr);
@@ -1065,14 +1057,14 @@
 
             let archiveHtml = '';
             if (m.withdrawalHistory && m.withdrawalHistory.length > 0) {
-                archiveHtml = `<div class="daily-log-box" style="max-height: 150px; font-size:0.75rem; border-color:var(--accent-purple); margin-top:10px;"><h4>🖨️ Archivo de Cierres (Reimpresión / Descarga)</h4>`;
+                archiveHtml = `<div class="daily-log-box" style="max-height: 150px; font-size:0.75rem; border-color:var(--accent-purple); margin-top:10px;"><h4>🖨️ Comprobantes Individuales de Cierres</h4>`;
                 m.withdrawalHistory.forEach((w, wIndex) => {
                     archiveHtml += `
                         <div class="daily-log-row" style="align-items:center; padding:4px 0;">
                             <span>📅 ${w.date} <br><small style="color:var(--text-muted)">Op: ${w.operator}</small></span>
                             <div style="display:flex; align-items:center; gap:6px;">
                                 <b>$${w.amount.toLocaleString()} CLP</b>
-                                <button class="btn-sm btn-report" style="padding:2px 6px; font-size:0.6rem;" onclick="reprintHistoricalClosure(${index}, ${wIndex})">🖨️ Ver / Descargar</button>
+                                <button class="btn-sm btn-report" style="padding:2px 6px; font-size:0.6rem;" onclick="reprintHistoricalClosure(${index}, ${wIndex})">🖨️ Imprimir Este Cierre</button>
                             </div>
                         </div>`;
                 });
@@ -1343,15 +1335,21 @@
             renderReportModalContent(m);
         }
 
+        // RENDERIZADO DE INFORME: Si recibe historicalClosure, muestra SOLO ese recibo individual listo para imprimir
         function renderReportModalContent(m, historicalClosure = null) {
-            let cInit, cFinal, cDelta, dineroRegistrado;
+            let cInit, cFinal, cDelta, dineroRegistrado, operadorCierre, fechaCierre, notaCierre;
             
             if (historicalClosure) {
+                // Modo Comprobante Individual de un Cierre Pasado
                 cInit = historicalClosure.coinInit;
                 cFinal = historicalClosure.coinFinal;
                 cDelta = historicalClosure.coinsDelta;
                 dineroRegistrado = historicalClosure.amount;
+                operadorCierre = historicalClosure.operator;
+                fechaCierre = historicalClosure.date;
+                notaCierre = historicalClosure.note;
             } else {
+                // Modo Informe Actual de la Máquina (Tabla completa)
                 let lastClosure = (m.withdrawalHistory && m.withdrawalHistory.length > 0 && m.sales === 0) ? m.withdrawalHistory[0] : null;
                 if (lastClosure && lastClosure.coinInit !== undefined) {
                     cInit = lastClosure.coinInit;
@@ -1371,65 +1369,99 @@
             let pDelta = historicalClosure ? (historicalClosure.prizesDelta || 0) : (m.prizes || 0);
             let pFinal = pInit + pDelta;
 
-            let badgeTitleSuffix = historicalClosure ? ` (REIMPRESIÓN CIERRE: ${historicalClosure.date})` : '';
-
-            if (currentRole === 'cliente') {
-                document.getElementById('report-title').innerText = `REPORTE DE TRANSPARENCIA - ${m.name.toUpperCase()}${badgeTitleSuffix}`;
-                document.getElementById('report-date').innerText = `Fecha de Emisión: ${new Date().toLocaleString()}`;
+            if (historicalClosure) {
+                // --- COMPROBANTE DE CIERRE INDIVIDUAL (Ideal para imprimir solo el de Daniel o Piero) ---
+                document.getElementById('report-title').innerText = `COMPROBANTE DE CIERRE INDIVIDUAL - ${m.name.toUpperCase()}`;
+                document.getElementById('report-date').innerText = `Fecha del Turno / Cierre: ${fechaCierre}`;
                 document.getElementById('report-content-body').innerHTML = `
                     <div style="margin-bottom: 15px; font-size: 0.85rem; background: #f8fafc; padding: 12px; border-radius: 6px; border: 1px solid #e2e8f0;">
+                        <p><b>Terminal:</b> ${m.name} (MAC: <code>${m.mac}</code>)</p>
                         <p><b>Ubicación:</b> ${m.location || 'Local Principal'}</p>
-                        <p><b>Estado del Terminal:</b> <span style="color: #10b981; font-weight:bold;">Operativo</span></p>
+                        <p><b>Operador Responsable:</b> <span style="color: #2563eb; font-weight:bold;">${operadorCierre}</span></p>
+                        <p><b>Observación del Cierre:</b> ${notaCierre}</p>
                     </div>
-                    <p style="font-weight: bold; margin-bottom: 6px;">📊 Auditoría de Entradas (Contador Mecánico):</p>
+                    <p style="font-weight: bold; margin-bottom: 6px;">📊 Auditoría Mecánica de Monedas:</p>
                     <table class="letter-table" style="margin-bottom: 15px;">
-                        <thead><tr><th>Concepto</th><th>Lectura / Valor</th></tr></thead>
+                        <thead><tr><th>Concepto</th><th>Valor Registrado</th></tr></thead>
                         <tbody>
-                            <tr><td><b>Contador Inicial</b></td><td>${cInit} un.</td></tr>
-                            <tr><td><b>Contador Final</b></td><td>${cFinal} un.</td></tr>
-                            <tr><td><b>Total Monedas Registradas (Delta)</b></td><td><b>${cDelta} un.</b></td></tr>
+                            <tr><td>Contador Inicial (Inicio Turno)</td><td>${cInit} un.</td></tr>
+                            <tr><td>Contador Final (Cierre Turno)</td><td>${cFinal} un.</td></tr>
+                            <tr><td><b>Total Monedas Recogidas (Delta)</b></td><td><b>${cDelta} un.</b></td></tr>
+                            <tr><td><b>Premios Entregados</b></td><td><b>${historicalClosure.prizesDelta || 0} un.</b></td></tr>
                         </tbody>
                     </table>
-                    <p style="font-weight: bold; margin-bottom: 6px;">💵 Dinero Registrado:</p>
+                    <p style="font-weight: bold; margin-bottom: 6px;">💵 Liquidación de Efectivo:</p>
                     <table class="letter-table">
-                        <thead><tr><th>Descripción</th><th>Monto Total</th></tr></thead>
+                        <thead><tr><th>Descripción del Retiro</th><th>Monto Líquido Liquidado</th></tr></thead>
                         <tbody>
-                            <tr><td><b>Total Ingresado (${cDelta} monedas × $100)</b></td><td style="font-size: 1.1rem; color: #059669; font-weight: bold;">$${dineroRegistrado.toLocaleString()} CLP</td></tr>
+                            <tr>
+                                <td><b>Total Recaudado (${cDelta} monedas × $100)</b></td>
+                                <td style="font-size: 1.1rem; color: #059669; font-weight: bold;">$${dineroRegistrado.toLocaleString()} CLP</td>
+                            </tr>
                         </tbody>
                     </table>
                 `;
             } else {
-                document.getElementById('report-title').innerText = `INFORME FINANCIERO - ${m.name.toUpperCase()}${badgeTitleSuffix}`;
-                document.getElementById('report-date').innerText = `Emisión: ${new Date().toLocaleString()}`;
-                
-                let withdrawalsHtml = '';
-                if(m.withdrawalHistory && m.withdrawalHistory.length > 0) {
-                    m.withdrawalHistory.forEach(w => {
-                        let detalleMonedas = (w.coinsDelta !== undefined) ? ` (${w.coinsDelta} mon. / ${w.prizesDelta || 0} prem.)` : '';
-                        withdrawalsHtml += `<tr><td>${w.date}</td><td><b>${w.operator}</b></td><td>$${w.amount.toLocaleString()} CLP${detalleMonedas}</td><td>${w.note}</td></tr>`;
-                    });
+                // --- INFORME GENERAL / FINANCIERO DE LA MÁQUINA ---
+                if (currentRole === 'cliente') {
+                    document.getElementById('report-title').innerText = `REPORTE DE TRANSPARENCIA - ${m.name.toUpperCase()}`;
+                    document.getElementById('report-date').innerText = `Fecha de Emisión: ${new Date().toLocaleString()}`;
+                    document.getElementById('report-content-body').innerHTML = `
+                        <div style="margin-bottom: 15px; font-size: 0.85rem; background: #f8fafc; padding: 12px; border-radius: 6px; border: 1px solid #e2e8f0;">
+                            <p><b>Ubicación:</b> ${m.location || 'Local Principal'}</p>
+                            <p><b>Estado del Terminal:</b> <span style="color: #10b981; font-weight:bold;">Operativo</span></p>
+                        </div>
+                        <p style="font-weight: bold; margin-bottom: 6px;">📊 Auditoría de Entradas (Contador Mecánico):</p>
+                        <table class="letter-table" style="margin-bottom: 15px;">
+                            <thead><tr><th>Concepto</th><th>Lectura / Valor</th></tr></thead>
+                            <tbody>
+                                <tr><td><b>Contador Inicial</b></td><td>${cInit} un.</td></tr>
+                                <tr><td><b>Contador Final</b></td><td>${cFinal} un.</td></tr>
+                                <tr><td><b>Total Monedas Registradas (Delta)</b></td><td><b>${cDelta} un.</b></td></tr>
+                            </tbody>
+                        </table>
+                        <p style="font-weight: bold; margin-bottom: 6px;">💵 Dinero Registrado:</p>
+                        <table class="letter-table">
+                            <thead><tr><th>Descripción</th><th>Monto Total</th></tr></thead>
+                            <tbody>
+                                <tr><td><b>Total Ingresado (${cDelta} monedas × $100)</b></td><td style="font-size: 1.1rem; color: #059669; font-weight: bold;">$${dineroRegistrado.toLocaleString()} CLP</td></tr>
+                            </tbody>
+                        </table>
+                    `;
                 } else {
-                    withdrawalsHtml = `<tr><td colspan="4" style="text-align:center;">Sin cierres aún.</td></tr>`;
-                }
+                    document.getElementById('report-title').innerText = `INFORME FINANCIERO - ${m.name.toUpperCase()}`;
+                    document.getElementById('report-date').innerText = `Emisión: ${new Date().toLocaleString()}`;
+                    
+                    let withdrawalsHtml = '';
+                    if(m.withdrawalHistory && m.withdrawalHistory.length > 0) {
+                        m.withdrawalHistory.forEach(w => {
+                            let detalleMonedas = (w.coinsDelta !== undefined) ? ` (${w.coinsDelta} mon. / ${w.prizesDelta || 0} prem.)` : '';
+                            withdrawalsHtml += `<tr><td>${w.date}</td><td><b>${w.operator}</b></td><td>$${w.amount.toLocaleString()} CLP${detalleMonedas}</td><td>${w.note}</td></tr>`;
+                        });
+                    } else {
+                        withdrawalsHtml = `<tr><td colspan="4" style="text-align:center;">Sin cierres aún.</td></tr>`;
+                    }
 
-                document.getElementById('report-content-body').innerHTML = `
-                    <div style="margin-bottom: 12px; font-size: 0.8rem; line-height: 1.4;">
-                        <p><b>MAC:</b> <code>${m.mac}</code></p>
-                        <p><b>Ubicación:</b> ${m.location || 'Local por definir'}</p>
-                        <p><b>Contador Monedas (Inicio ➔ Final):</b> ${cInit} ➔ ${cFinal} (Delta: ${cDelta} un. | $${dineroRegistrado.toLocaleString()} CLP)</p>
-                        <p><b>Contador Premios (Inicio ➔ Final):</b> ${pInit} ➔ ${pFinal} (Entregados: ${pDelta} un.)</p>
-                    </div>
-                    <p><b>💵 Historial de Cierres de Caja y Auditoría:</b></p>
-                    <table class="letter-table" style="margin-top:5px; margin-bottom:15px;">
-                        <thead><tr><th>Fecha y Hora</th><th>Responsable</th><th>Monto Recaudado</th><th>Observación</th></tr></thead>
-                        <tbody>${withdrawalsHtml}</tbody>
-                    </table>
-                `;
+                    document.getElementById('report-content-body').innerHTML = `
+                        <div style="margin-bottom: 12px; font-size: 0.8rem; line-height: 1.4;">
+                            <p><b>MAC:</b> <code>${m.mac}</code></p>
+                            <p><b>Ubicación:</b> ${m.location || 'Local por definir'}</p>
+                            <p><b>Contador Monedas (Inicio ➔ Final):</b> ${cInit} ➔ ${cFinal} (Delta: ${cDelta} un. | $${dineroRegistrado.toLocaleString()} CLP)</p>
+                            <p><b>Contador Premios (Inicio ➔ Final):</b> ${pInit} ➔ ${pFinal} (Entregados: ${pDelta} un.)</p>
+                        </div>
+                        <p><b>💵 Historial de Cierres de Caja y Auditoría:</b></p>
+                        <table class="letter-table" style="margin-top:5px; margin-bottom:15px;">
+                            <thead><tr><th>Fecha y Hora</th><th>Responsable</th><th>Monto Recaudado</th><th>Observación</th></tr></thead>
+                            <tbody>${withdrawalsHtml}</tbody>
+                        </table>
+                    `;
+                }
             }
 
             document.getElementById('print-modal').style.display = 'flex';
         }
 
+        // Función para abrir el comprobante individual de un cierre específico hecho por Daniel, Piero, etc.
         function reprintHistoricalClosure(machineIndex, closureIndex) {
             let m = machines[machineIndex];
             if (m && m.withdrawalHistory && m.withdrawalHistory[closureIndex]) {
@@ -1437,33 +1469,6 @@
                 closeDetailModal();
                 renderReportModalContent(m, targetClosure);
             }
-        }
-
-        // 📥 FUNCIÓN DE DESCARGA DE INFORME EN FORMATO TXT / RESUMEN INDIVIDUAL
-        function downloadIndividualReportTxt() {
-            let title = document.getElementById('report-title').innerText;
-            let date = document.getElementById('report-date').innerText;
-            let bodyHTML = document.getElementById('report-content-body').innerText;
-
-            let fileContent = `========================================\n` +
-                              `   INVERSIONES WIN WIN SpA - INFORME\n` +
-                              `========================================\n\n` +
-                              `${title}\n${date}\n\n` +
-                              `----------------------------------------\n\n` +
-                              `${bodyHTML}\n\n` +
-                              `========================================\n` +
-                              `   FIN DEL REPORTE OFICIAL CERTIFICADO\n` +
-                              `========================================`;
-
-            let blob = new Blob([fileContent], { type: 'text/plain;charset=utf-8' });
-            let url = URL.createObjectURL(blob);
-            let a = document.createElement('a');
-            a.href = url;
-            a.download = `${title.replace(/[^a-zA-Z0-9]/g, '_')}_WinWin.txt`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
         }
 
         function openGlobalReport() {
