@@ -546,6 +546,7 @@
             }
         }
 
+        // 🚨 ALARMA ACÚSTICA CATEGÓRICA, NOTORIA Y DIFERENCIADA PARA ONLINE / OFFLINE Y CAMBIO DE ESTADO
         function playAlertAlarmSound(isOnline) {
             if (!soundEnabled) return;
             try {
@@ -554,25 +555,36 @@
                 if (audioCtx.state === 'suspended') { audioCtx.resume(); }
 
                 const now = audioCtx.currentTime;
-                let osc = audioCtx.createOscillator();
-                let gain = audioCtx.createGain();
-
-                osc.type = 'sine';
+                
                 if (isOnline) {
-                    osc.frequency.setValueAtTime(587.33, now); 
-                    osc.frequency.setValueAtTime(880.00, now + 0.1); 
+                    // 🟢 SONIDO ONLINE: Doble tono agudo y limpio (Bip-Bip de éxito)
+                    [1046.50, 1318.51].forEach((freq, i) => {
+                        let osc = audioCtx.createOscillator();
+                        let gain = audioCtx.createGain();
+                        osc.type = 'sine';
+                        osc.frequency.setValueAtTime(freq, now + (i * 0.12));
+                        gain.gain.setValueAtTime(0.4, now + (i * 0.12));
+                        gain.gain.exponentialRampToValueAtTime(0.001, now + (i * 0.12) + 0.1);
+                        osc.connect(gain);
+                        gain.connect(audioCtx.destination);
+                        osc.start(now + (i * 0.12));
+                        osc.stop(now + (i * 0.12) + 0.1);
+                    });
                 } else {
-                    osc.frequency.setValueAtTime(440.00, now); 
-                    osc.frequency.setValueAtTime(220.00, now + 0.15); 
+                    // 🔴 SONIDO OFFLINE / ALERTA CRÍTICA: Doble tono grave y cortante (Sirena de atención)
+                    [330.00, 220.00].forEach((freq, i) => {
+                        let osc = audioCtx.createOscillator();
+                        let gain = audioCtx.createGain();
+                        osc.type = 'sawtooth'; // Sonido más rasposo y notorio
+                        osc.frequency.setValueAtTime(freq, now + (i * 0.18));
+                        gain.gain.setValueAtTime(0.5, now + (i * 0.18));
+                        gain.gain.exponentialRampToValueAtTime(0.001, now + (i * 0.18) + 0.15);
+                        osc.connect(gain);
+                        gain.connect(audioCtx.destination);
+                        osc.start(now + (i * 0.18));
+                        osc.stop(now + (i * 0.18) + 0.15);
+                    });
                 }
-
-                gain.gain.setValueAtTime(0.3, now);
-                gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.3);
-
-                osc.connect(gain);
-                gain.connect(audioCtx.destination);
-                osc.start(now);
-                osc.stop(now + 0.3);
             } catch(e) {
                 console.log("Alarma de audio bloqueada", e);
             }
@@ -736,7 +748,7 @@
                             let oldOnline = previousOnlineState[newM.mac];
                             let currentOnline = newM.is_online !== false;
                             if (oldOnline !== undefined && oldOnline !== currentOnline) {
-                                playAlertAlarmSound(currentOnline);
+                                playAlertAlarmSound(currentOnline); // 🔊 Dispara alarma fuerte ONLINE / OFFLINE
                             }
                             previousOnlineState[newM.mac] = currentOnline;
                         });
@@ -1270,6 +1282,7 @@
             m.sales = 0;
             m.box = 0;
             m.lastSalesCount = 0;
+            playAlertAlarmSound(true); // 🔊 Sonido de éxito al vaciar caja
             logAuditEvent("CIERRE DE CAJA INDIVIDUAL", m.name, operador, `Recaudado: $${dineroRecaudado.toLocaleString()} CLP`);
             updateUI();
             alert(`✅ Cierre registrado con éxito.`);
@@ -1279,7 +1292,7 @@
             if (index === undefined || index < 0 || !machines[index]) return;
             machines[index].active = !machines[index].active;
             let statusStr = machines[index].active ? "Activada" : "Pausada";
-            playAlertAlarmSound(machines[index].active); // 🔊 Sonido al activar/pausar
+            playAlertAlarmSound(machines[index].active); // 🔊 Sonido categórico al pausar/activar
             logAuditEvent("CAMBIO DE ESTADO", machines[index].name, null, `Máquina ${statusStr}`);
             updateUI();
         }
@@ -1289,6 +1302,7 @@
             let mName = machines[index].name;
             if(confirm(`¿Estás seguro de eliminar permanentemente la máquina "${mName}"?`)) {
                 machines.splice(index, 1);
+                playAlertAlarmSound(false);
                 logAuditEvent("ELIMINACIÓN DE TERMINAL", mName, null, "Terminal eliminado");
                 updateUI();
             }
@@ -1312,6 +1326,7 @@
                     prizeInitial: 1164, 
                     dailyLogs: {}, withdrawalHistory: [] 
                 });
+                playAlertAlarmSound(true);
                 logAuditEvent("REGISTRO NUEVA MÁQUINA", newMachineName, null, `MAC registrada: ${macInput}`);
                 updateUI();
                 alert("¡Máquina registrada con éxito!");
@@ -1442,7 +1457,7 @@
                 let cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
                 let telemetryPulses = Math.floor((m.sales || 0) / 100);
                 let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
-                let cDelta = Math.max(0, cFinal - cInit);
+                    let cDelta = Math.max(0, cFinal - cInit);
                 let recMachine = cDelta * 100;
                 totalRecaudado += recMachine;
                 tableRows += `<tr><td><b>${m.name}</b></td><td>$${recMachine.toLocaleString()}</td><td>${m.active ? 'Activa' : 'Pausada'}</td></tr>`;
