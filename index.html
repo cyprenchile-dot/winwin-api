@@ -768,9 +768,15 @@
             let todayStr = getChileDateStr(); 
 
             machines.forEach(m => {
-                let prevSales = previousSalesState[m.mac] || 0;
                 let currentSales = m.sales || 0;
                 
+                // Inicialización segura para evitar falsa alarma de sonido al cargar o abrir informes
+                if (previousSalesState[m.mac] === undefined) {
+                    previousSalesState[m.mac] = currentSales;
+                }
+
+                let prevSales = previousSalesState[m.mac];
+
                 if (currentSales > prevSales) {
                     let diff = currentSales - prevSales;
                     let coinsCount = Math.floor(diff / 100); 
@@ -1318,7 +1324,7 @@
             renderReportModalContent(m, null);
         }
 
-        // MOTOR DE RENDERIZADO CON BOTÓN DIRECTO "📥 Imprimir Este" AL LADO DE CADA "CIERRE OK"
+        // MOTOR DE RENDERIZADO DE INFORMES CON BOTÓN "📥 Imprimir Este" AL LADO DE CADA CIERRE
         function renderReportModalContent(m, historicalClosure = null) {
             let cInit, cFinal, cDelta, dineroRegistrado;
 
@@ -1421,7 +1427,6 @@
             document.getElementById('print-modal').style.display = 'flex';
         }
 
-        // Función que transforma el modal al hacer clic en "📥 Imprimir Este" junto al Cierre OK
         function printSpecificClosureFromTable(machineIndex, closureIndex) {
             let m = machines[machineIndex];
             if (m && m.withdrawalHistory && m.withdrawalHistory[closureIndex]) {
