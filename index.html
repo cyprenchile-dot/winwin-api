@@ -1055,22 +1055,6 @@
                 fullLogsHtml += `</div>`;
             }
 
-            let archiveHtml = '';
-            if (m.withdrawalHistory && m.withdrawalHistory.length > 0) {
-                archiveHtml = `<div class="daily-log-box" style="max-height: 150px; font-size:0.75rem; border-color:var(--accent-purple); margin-top:10px;"><h4>🖨️ Comprobantes Individuales por Operador</h4>`;
-                m.withdrawalHistory.forEach((w, wIndex) => {
-                    archiveHtml += `
-                        <div class="daily-log-row" style="align-items:center; padding:4px 0;">
-                            <span>📅 ${w.date} <br><small style="color:var(--text-muted)">Operador: <b>${w.operator}</b></small></span>
-                            <div style="display:flex; align-items:center; gap:6px;">
-                                <b>$${w.amount.toLocaleString()} CLP</b>
-                                <button class="btn-sm btn-report" style="padding:2px 6px; font-size:0.6rem;" onclick="openIndividualClosureReport(${index}, ${wIndex})">🖨️ Ver Cierre Individual</button>
-                            </div>
-                        </div>`;
-                });
-                archiveHtml += `</div>`;
-            }
-
             document.getElementById('detail-modal-content').innerHTML = `
                 <h2>🔍 Vista Ampliada: ${m.name}</h2>
                 <p style="font-size:0.75rem; color:var(--text-muted); margin-bottom:10px;">MAC: <code>${m.mac}</code> | Local: ${m.location}</p>
@@ -1079,7 +1063,6 @@
                     <p style="font-size:0.8rem; color:var(--accent-green);"><b>Caja Física Acumulada:</b> $${dineroRegistrado.toLocaleString()} CLP (${cDelta} monedas)</p>
                 </div>
                 ${fullLogsHtml}
-                ${archiveHtml}
                 <div class="edit-actions" style="margin-top: 15px;">
                     <button class="btn btn-secondary" onclick="closeDetailModal()">Cerrar Vista</button>
                 </div>
@@ -1335,17 +1318,7 @@
             renderReportModalContent(m, null);
         }
 
-        // FUNCIÓN CLAVE: Abre el comprobante 100% INDIVIDUAL del operador seleccionado (Daniel, Piero, etc.)
-        function openIndividualClosureReport(machineIndex, closureIndex) {
-            let m = machines[machineIndex];
-            if (m && m.withdrawalHistory && m.withdrawalHistory[closureIndex]) {
-                let targetClosure = m.withdrawalHistory[closureIndex];
-                closeDetailModal();
-                renderReportModalContent(m, targetClosure);
-            }
-        }
-
-        // MOTOR DE RENDERIZADO DE INFORMES (General vs Comprobante Individual)
+        // MOTOR DE RENDERIZADO CON BOTÓN DIRECTO "📥 Imprimir Este" AL LADO DE CADA "CIERRE OK"
         function renderReportModalContent(m, historicalClosure = null) {
             let cInit, cFinal, cDelta, dineroRegistrado;
 
@@ -1375,15 +1348,15 @@
             let pFinal = pInit + pDelta;
 
             if (historicalClosure) {
-                // --- VISTA EXCLUSIVA DE COMPROBANTE INDIVIDUAL (DANIEL / PIERO) ---
+                // --- VISTA DE COMPROBANTE INDIVIDUAL (DANIEL / PIERO) ---
                 document.getElementById('report-title').innerText = `COMPROBANTE DE CIERRE - ${m.name.toUpperCase()}`;
                 document.getElementById('report-date').innerText = `Fecha y Hora del Turno: ${historicalClosure.date}`;
                 document.getElementById('report-content-body').innerHTML = `
                     <div style="margin-bottom: 15px; font-size: 0.85rem; background: #f8fafc; padding: 12px; border-radius: 6px; border: 1px solid #e2e8f0; color:#000;">
                         <p><b>Terminal:</b> ${m.name}</p>
                         <p><b>Ubicación del Local:</b> ${m.location || 'Local Principal'}</p>
-                        <p><b>Operador Responsable del Turno:</b> <span style="color: #2563eb; font-weight:bold; font-size:0.95rem;">${historicalClosure.operator}</span></p>
-                        <p><b>Observación Registrada:</b> ${historicalClosure.note}</p>
+                        <p><b>Operador Responsable:</b> <span style="color: #2563eb; font-weight:bold; font-size:0.95rem;">${historicalClosure.operator}</span></p>
+                        <p><b>Observación:</b> ${historicalClosure.note}</p>
                     </div>
                     <p style="font-weight: bold; margin-bottom: 6px; color:#000;">📊 Auditoría de Monedas en este Cierre:</p>
                     <table class="letter-table" style="margin-bottom: 15px;">
@@ -1407,57 +1380,54 @@
                     </table>
                 `;
             } else {
-                // --- VISTA GENERAL DE LA MÁQUINA (Tabla completa de todos los cierres) ---
-                if (currentRole === 'cliente') {
-                    document.getElementById('report-title').innerText = `REPORTE DE TRANSPARENCIA - ${m.name.toUpperCase()}`;
-                    document.getElementById('report-date').innerText = `Fecha de Emisión: ${new Date().toLocaleString()}`;
-                    document.getElementById('report-content-body').innerHTML = `
-                        <div style="margin-bottom: 15px; font-size: 0.85rem; background: #f8fafc; padding: 12px; border-radius: 6px; border: 1px solid #e2e8f0; color:#000;">
-                            <p><b>Ubicación:</b> ${m.location || 'Local Principal'}</p>
-                            <p><b>Estado del Terminal:</b> <span style="color: #10b981; font-weight:bold;">Operativo</span></p>
-                        </div>
-                        <p style="font-weight: bold; margin-bottom: 6px; color:#000;">📊 Auditoría de Entradas:</p>
-                        <table class="letter-table" style="margin-bottom: 15px;">
-                            <thead><tr><th>Concepto</th><th>Valor</th></tr></thead>
-                            <tbody>
-                                <tr><td>Contador Inicial</td><td>${cInit} un.</td></tr>
-                                <tr><td>Contador Final</td><td>${cFinal} un.</td></tr>
-                                <tr><td><b>Total Monedas (Delta)</b></td><td><b>${cDelta} un.</b></td></tr>
-                            </tbody>
-                        </table>
-                        <p style="font-weight: bold; margin-bottom: 6px; color:#000;">💵 Dinero Registrado: <span style="color:#059669;">$${dineroRegistrado.toLocaleString()} CLP</span></p>
-                    `;
+                // --- VISTA GENERAL DE LA MÁQUINA CON BOTÓN DIRECTO "📥 Imprimir Este" AL LADO DE CADA CIERRE ---
+                let machineIndex = machines.findIndex(x => x.mac === m.mac);
+                let withdrawalsHtml = '';
+                if(m.withdrawalHistory && m.withdrawalHistory.length > 0) {
+                    m.withdrawalHistory.forEach((w, wIndex) => {
+                        let detalleMonedas = (w.coinsDelta !== undefined) ? ` (${w.coinsDelta} mon. / ${w.prizesDelta || 0} prem.)` : '';
+                        withdrawalsHtml += `
+                            <tr>
+                                <td>${w.date}</td>
+                                <td><b>${w.operator}</b></td>
+                                <td>$${w.amount.toLocaleString()} CLP${detalleMonedas}</td>
+                                <td>
+                                    ${w.note} 
+                                    <button style="background: #2563eb; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 0.65rem; cursor: pointer; font-weight: bold; margin-left: 8px; display: inline-block;" onclick="printSpecificClosureFromTable(${machineIndex}, ${wIndex})">📥 Imprimir Este</button>
+                                </td>
+                            </tr>`;
+                    });
                 } else {
-                    document.getElementById('report-title').innerText = `INFORME FINANCIERO GENERAL - ${m.name.toUpperCase()}`;
-                    document.getElementById('report-date').innerText = `Emisión: ${new Date().toLocaleString()}`;
-                    
-                    let withdrawalsHtml = '';
-                    if(m.withdrawalHistory && m.withdrawalHistory.length > 0) {
-                        m.withdrawalHistory.forEach(w => {
-                            let detalleMonedas = (w.coinsDelta !== undefined) ? ` (${w.coinsDelta} mon. / ${w.prizesDelta || 0} prem.)` : '';
-                            withdrawalsHtml += `<tr><td>${w.date}</td><td><b>${w.operator}</b></td><td>$${w.amount.toLocaleString()} CLP${detalleMonedas}</td><td>${w.note}</td></tr>`;
-                        });
-                    } else {
-                        withdrawalsHtml = `<tr><td colspan="4" style="text-align:center;">Sin cierres aún.</td></tr>`;
-                    }
-
-                    document.getElementById('report-content-body').innerHTML = `
-                        <div style="margin-bottom: 12px; font-size: 0.8rem; line-height: 1.4; color:#000;">
-                            <p><b>MAC:</b> <code>${m.mac}</code></p>
-                            <p><b>Ubicación:</b> ${m.location || 'Local por definir'}</p>
-                            <p><b>Contador Monedas (Inicio ➔ Final):</b> ${cInit} ➔ ${cFinal} (Delta: ${cDelta} un. | $${dineroRegistrado.toLocaleString()} CLP)</p>
-                            <p><b>Contador Premios (Inicio ➔ Final):</b> ${pInit} ➔ ${pFinal} (Entregados: ${pDelta} un.)</p>
-                        </div>
-                        <p style="color:#000; font-weight:bold;">💵 Historial Completo de Cierres de Caja:</p>
-                        <table class="letter-table" style="margin-top:5px; margin-bottom:15px;">
-                            <thead><tr><th>Fecha y Hora</th><th>Responsable</th><th>Monto Recaudado</th><th>Observación</th></tr></thead>
-                            <tbody>${withdrawalsHtml}</tbody>
-                        </table>
-                    `;
+                    withdrawalsHtml = `<tr><td colspan="4" style="text-align:center;">Sin cierres aún.</td></tr>`;
                 }
+
+                document.getElementById('report-title').innerText = `INFORME FINANCIERO GENERAL - ${m.name.toUpperCase()}`;
+                document.getElementById('report-date').innerText = `Emisión: ${new Date().toLocaleString()}`;
+                document.getElementById('report-content-body').innerHTML = `
+                    <div style="margin-bottom: 12px; font-size: 0.8rem; line-height: 1.4; color:#000;">
+                        <p><b>MAC:</b> <code>${m.mac}</code></p>
+                        <p><b>Ubicación:</b> ${m.location || 'Local por definir'}</p>
+                        <p><b>Contador Monedas (Inicio ➔ Final):</b> ${cInit} ➔ ${cFinal} (Delta: ${cDelta} un. | $${dineroRegistrado.toLocaleString()} CLP)</p>
+                        <p><b>Contador Premios (Inicio ➔ Final):</b> ${pInit} ➔ ${pFinal} (Entregados: ${pDelta} un.)</p>
+                    </div>
+                    <p style="color:#000; font-weight:bold;">💵 Historial de Cierres de Caja (Haz clic en "📥 Imprimir Este" para aislar y descargar el comprobante individual de Daniel o Piero):</p>
+                    <table class="letter-table" style="margin-top:5px; margin-bottom:15px;">
+                        <thead><tr><th>Fecha y Hora</th><th>Responsable</th><th>Monto Recaudado</th><th>Observación / Acción</th></tr></thead>
+                        <tbody>${withdrawalsHtml}</tbody>
+                    </table>
+                `;
             }
 
             document.getElementById('print-modal').style.display = 'flex';
+        }
+
+        // Función que transforma el modal al hacer clic en "📥 Imprimir Este" junto al Cierre OK
+        function printSpecificClosureFromTable(machineIndex, closureIndex) {
+            let m = machines[machineIndex];
+            if (m && m.withdrawalHistory && m.withdrawalHistory[closureIndex]) {
+                let targetClosure = m.withdrawalHistory[closureIndex];
+                renderReportModalContent(m, targetClosure);
+            }
         }
 
         function openGlobalReport() {
