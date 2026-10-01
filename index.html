@@ -770,7 +770,6 @@
             machines.forEach(m => {
                 let currentSales = m.sales || 0;
                 
-                // Inicialización segura para evitar falsa alarma de sonido al cargar o abrir informes
                 if (previousSalesState[m.mac] === undefined) {
                     previousSalesState[m.mac] = currentSales;
                 }
@@ -1280,6 +1279,7 @@
             if (index === undefined || index < 0 || !machines[index]) return;
             machines[index].active = !machines[index].active;
             let statusStr = machines[index].active ? "Activada" : "Pausada";
+            playAlertAlarmSound(machines[index].active); // 🔊 Sonido al activar/pausar
             logAuditEvent("CAMBIO DE ESTADO", machines[index].name, null, `Máquina ${statusStr}`);
             updateUI();
         }
@@ -1324,7 +1324,6 @@
             renderReportModalContent(m, null);
         }
 
-        // MOTOR DE RENDERIZADO DE INFORMES CON BOTÓN "📥 Imprimir Este" AL LADO DE CADA CIERRE
         function renderReportModalContent(m, historicalClosure = null) {
             let cInit, cFinal, cDelta, dineroRegistrado;
 
@@ -1354,7 +1353,6 @@
             let pFinal = pInit + pDelta;
 
             if (historicalClosure) {
-                // --- VISTA DE COMPROBANTE INDIVIDUAL (DANIEL / PIERO) ---
                 document.getElementById('report-title').innerText = `COMPROBANTE DE CIERRE - ${m.name.toUpperCase()}`;
                 document.getElementById('report-date').innerText = `Fecha y Hora del Turno: ${historicalClosure.date}`;
                 document.getElementById('report-content-body').innerHTML = `
@@ -1386,7 +1384,6 @@
                     </table>
                 `;
             } else {
-                // --- VISTA GENERAL DE LA MÁQUINA CON BOTÓN DIRECTO "📥 Imprimir Este" AL LADO DE CADA CIERRE ---
                 let machineIndex = machines.findIndex(x => x.mac === m.mac);
                 let withdrawalsHtml = '';
                 if(m.withdrawalHistory && m.withdrawalHistory.length > 0) {
@@ -1416,7 +1413,7 @@
                         <p><b>Contador Monedas (Inicio ➔ Final):</b> ${cInit} ➔ ${cFinal} (Delta: ${cDelta} un. | $${dineroRegistrado.toLocaleString()} CLP)</p>
                         <p><b>Contador Premios (Inicio ➔ Final):</b> ${pInit} ➔ ${pFinal} (Entregados: ${pDelta} un.)</p>
                     </div>
-                    <p style="color:#000; font-weight:bold;">💵 Historial de Cierres de Caja (Haz clic en "📥 Imprimir Este" para aislar y descargar el comprobante individual de Daniel o Piero):</p>
+                    <p style="color:#000; font-weight:bold;">💵 Historial de Cierres de Caja:</p>
                     <table class="letter-table" style="margin-top:5px; margin-bottom:15px;">
                         <thead><tr><th>Fecha y Hora</th><th>Responsable</th><th>Monto Recaudado</th><th>Observación / Acción</th></tr></thead>
                         <tbody>${withdrawalsHtml}</tbody>
