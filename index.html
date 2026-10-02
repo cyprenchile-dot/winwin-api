@@ -793,7 +793,7 @@
                     document.getElementById('server-status').style.color = "var(--accent-green)";
                 }
             } catch (error) {
-                document.getElementById('server-status').innerText = "OFFLINE (Modo Local)",
+                document.getElementById('server-status').innerText = "OFFLINE (Modo Local)";
                 document.getElementById('server-status').style.color = "#f59e0b";
             }
         }
@@ -825,28 +825,33 @@
                 }
                 previousSalesState[m.mac] = currentSales;
 
-                // 🛡️ REGLA SUIZA DE CERO FANTASMAS: BASELINE DIARIO POR FECHA
-                if (!m.dailyBaselineDate || m.dailyBaselineDate !== todayStr) {
-                    m.dailyBaselineDate = todayStr;
-                    m.dayStartSales = currentSales;
-                }
-
-                let machineTodaySales = Math.max(0, currentSales - (m.dayStartSales !== undefined ? m.dayStartSales : currentSales));
-                if (!m.dailyLogs) m.dailyLogs = {};
-                m.dailyLogs[todayStr] = machineTodaySales;
-
-                totalDaily += machineTodaySales;
-
-                let isOnline = m.is_online !== false;
-                if (isOnline) onlineCount++;
-
-                let cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
+                // 🛡️ CORRECCIÓN SUIZA: VENTA DEL DÍA DERIVADA DIRECTAMENTE DE LOS PULSOS NUEVOS (DINERO REGISTRADO)
+                if (m.coinInitial === undefined) m.coinInitial = 3768;
+                let cInit = m.coinInitial;
                 let telemetryPulses = Math.floor(currentSales / 100);
                 let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
                 let cDelta = Math.max(0, cFinal - cInit);
-                let dineroRegistradoPorContador = cDelta * 100;
-                 
-                totalBox += dineroRegistradoPorContador;
+                let dineroRegistradoTotal = cDelta * 100;
+
+                // Inicializar registro del día si no existe
+                if (!m.dailyLogs) m.dailyLogs = {};
+                
+                // Si es la primera vez que vemos esta fecha, registramos la base mecánica de inicio del día
+                if (!m.dayStartDinero || m.dayStartDineroDate !== todayStr) {
+                    m.dayStartDineroDate = todayStr;
+                    // Guardamos cuánto dinero registrado había al iniciar este día
+                    m.dayStartDinero = dineroRegistradoTotal;
+                }
+
+                // La venta del día es estrictamente lo que aumentó el dinero registrado desde que empezó el día
+                let machineTodaySales = Math.max(0, dineroRegistradoTotal - (m.dayStartDinero !== undefined ? m.dayStartDinero : dineroRegistradoTotal));
+                m.dailyLogs[todayStr] = machineTodaySales;
+
+                totalDaily += machineTodaySales;
+                totalBox += dineroRegistradoTotal;
+
+                let isOnline = m.is_online !== false;
+                if (isOnline) onlineCount++;
 
                 let pDelta = m.prizes || 0;
                 totalPrizes += pDelta;
@@ -1580,7 +1585,7 @@
                     <tbody>${tableRows}</tbody>
                 </table>
             `;
-            document.getElementById('print-modal').style.display = 'print'; // Wait, let's keep it display = 'flex'
+            document.getElementById('print-modal').style.display = 'flex';
         }
 
         function closeReport() { document.getElementById('print-modal').style.display = 'none'; }
