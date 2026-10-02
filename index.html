@@ -89,6 +89,33 @@
             text-shadow: 0 0 5px rgba(56, 189, 248, 0.4);
         }
 
+        /* ESTILOS WIFI VISUAL GRADUAL */
+        .wifi-visual-container {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .wifi-header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+        .wifi-bars {
+            display: flex;
+            gap: 3px;
+            align-items: flex-end;
+            height: 14px;
+            margin-top: 2px;
+        }
+        .wifi-bar {
+            width: 5px;
+            border-radius: 1px;
+            background: rgba(255,255,255,0.15);
+            transition: 0.3s;
+        }
+
         /* SECCIÓN DE MÁQUINAS */
         .machines-section { margin-bottom: 15px; }
         .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 10px; }
@@ -253,13 +280,13 @@
             <div class="value" id="avg-machine-sales">$0 CLP</div>
             <div class="subtext" id="avg-machine-status" style="color: var(--accent-green);">Calculando...</div>
         </div>
-        <!-- NUEVO INDICADOR NIVEL ELON: % MÁQUINAS OPERATIVAS -->
+        <!-- PORCENTAJE DE FLOTA OPERATIVA -->
         <div class="card gerencia-only" style="border-left: 3px solid var(--accent-green);">
             <h3>Flota Operativa</h3>
             <div class="value" id="fleet-operational-percent">0%</div>
             <div class="subtext" id="fleet-operational-subtext">0 de 0 online</div>
         </div>
-        <!-- NUEVO INDICADOR NIVEL ELON: VELOCIDAD DE CAJA -->
+        <!-- VELOCIDAD DE CAJA -->
         <div class="card gerencia-only" style="border-left: 3px solid var(--accent-purple);">
             <h3>Velocidad de Caja</h3>
             <div class="value" id="cash-velocity">$0 / hr</div>
@@ -337,7 +364,7 @@
     <!-- MODAL DE EDICIÓN CON MAPA -->
     <div id="edit-modal" class="modal-overlay">
         <div class="edit-box">
-            <h2>✏️️ Editar Terminal y Ubicación GPS</h2>
+            <h2>✏️ Editar Terminal y Ubicación GPS</h2>
             <input type="hidden" id="edit-index">
             <div class="edit-group">
                 <label>Nombre de la Terminal:</label>
@@ -419,7 +446,7 @@
         let currentRole = 'gerencia';
         let soundEnabled = true;
 
-        // GRÁFICO MAESTRO DUAL-AXIS CORRELACIONADO (BARRAS = VENTA TOTAL + LÍNEA = PROMEDIO POR MÁQUINA)
+        // GRÁFICO MAESTRO DUAL-AXIS CORRELACIONADO
         const ctx = document.getElementById('salesChart').getContext('2d');
         const salesChart = new Chart(ctx, {
             type: 'bar',
@@ -692,6 +719,36 @@
             return html;
         }
 
+        function getWifiDetails(dBm) {
+            let val = dBm || -50;
+            if (val >= -55) return { label: 'Excelente', color: '#10b981', level: 4 };
+            if (val >= -65) return { label: 'Muy buena', color: '#34d399', level: 3 };
+            if (val >= -75) return { label: 'Buena', color: '#3b82f6', level: 2 };
+            if (val >= -85) return { label: 'Regular', color: '#f59e0b', level: 1 };
+            if (val >= -95) return { label: 'Débil', color: '#f97316', level: 0.5 };
+            return { label: 'Nula', color: '#ef4444', level: 0 };
+        }
+
+        function formatWifiVisual(dBm) {
+            let info = getWifiDetails(dBm);
+            let activeBars = info.level === 4 ? 4 : (info.level === 3 ? 3 : (info.level === 2 ? 2 : (info.level === 1 ? 1 : (info.level === 0.5 ? 1 : 0))));
+            let html = `
+                <div class="wifi-visual-container">
+                    <div class="wifi-header-row">
+                        <span style="color: ${info.color}; font-weight: 800;">${info.label}</span>
+                        <span style="font-size: 0.65rem; color: var(--text-muted);">${dBm || -50} dBm</span>
+                    </div>
+                    <div class="wifi-bars">
+                        <div class="wifi-bar" style="background: ${activeBars >= 1 ? info.color : 'rgba(255,255,255,0.15)'}; height: 4px;"></div>
+                        <div class="wifi-bar" style="background: ${activeBars >= 2 ? info.color : 'rgba(255,255,255,0.15)'}; height: 7px;"></div>
+                        <div class="wifi-bar" style="background: ${activeBars >= 3 ? info.color : 'rgba(255,255,255,0.15)'}; height: 10px;"></div>
+                        <div class="wifi-bar" style="background: ${activeBars >= 4 ? info.color : 'rgba(255,255,255,0.15)'}; height: 14px;"></div>
+                    </div>
+                </div>
+            `;
+            return html;
+        }
+
         function saveStateAndSync() {
             saveToLocalStorage();
             fetch('https://winwin-api-v2.onrender.com/api/sync-fleet', {
@@ -790,10 +847,10 @@
                 totalPrizes += pDelta;
             });
 
-            // ⚡ MOTOR MAESTRO UNIFICADO DE PERSISTENCIA Y GRÁFICO DUAL CORRELACIONADO
+            // MOTOR MAESTRO UNIFICADO DE PERSISTENCIA Y GRÁFICO
             rebuildMasterLedgerAndChart(totalDaily);
 
-            // CÁLCULO DE VENTA PROMEDIO / MÁQUINA (EXCELENTE > $15k)
+            // CÁLCULO DE VENTA PROMEDIO / MÁQUINA
             let avgPerMachine = machines.length > 0 ? totalDaily / machines.length : 0;
             let avgStatusText = "";
             let avgStatusColor = "";
@@ -829,7 +886,6 @@
                 avgBorderColor = "#ef4444";
             }
 
-            // MÉTRICAS ELON MUSK (VELOCIDAD DE CAJA Y % OPERATIVO)
             let currentHour = new Date().getHours();
             let operationalHours = Math.max(1, currentHour - 8);
             let cashVelocity = Math.round(totalDaily / operationalHours);
@@ -865,7 +921,6 @@
             updateFleetMapMarkers(machines);
         }
 
-        // 🧠 MOTOR UNIFICADO DE PERSISTENCIA Y GRÁFICO DUAL CORRELACIONADO CON DÍAS REALES
         function rebuildMasterLedgerAndChart(totalDaily) {
             let todayStr = getChileDateStr();
             
@@ -894,7 +949,6 @@
                 prizes: dateMap[date].prizes || 0
             })).sort((a, b) => b.date.localeCompare(a.date));
 
-            // Alimentar Gráfico Maestro Dual con los últimos 7 días exactos correlacionados
             let chartLabels = [];
             let chartBarData = [];
             let chartLineData = [];
@@ -1046,7 +1100,11 @@
                         </div>
                         ${formatMechanicalCounter(cFinal)}
                     </div>
-                    <div class="stat-box" style="grid-column: 1 / -1;">
+                    <div class="stat-box">
+                        <span>SEÑAL WI-FI</span>
+                        ${formatWifiVisual(m.wifi)}
+                    </div>
+                    <div style="grid-column: 1 / -1;">
                         ${dailyLogsHtml}
                     </div>
                 `;
