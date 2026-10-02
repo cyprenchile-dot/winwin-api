@@ -773,7 +773,6 @@
                 const response = await fetch('https://winwin-api-v2.onrender.com/api/sync-fleet', { signal: AbortSignal.timeout(5000) });
                 if(response.ok) {
                     const data = await response.json();
-                    // 🛡️ REGLA ABSOLUTA ANTI-WIPE: NUNCA SOBRESCRIBIR LOCAL CON UN SERVIDOR VACÍO O NULO
                     if(data && Array.isArray(data.machines) && data.machines.length > 0) {
                         data.machines.forEach(newM => {
                             let oldOnline = previousOnlineState[newM.mac];
@@ -783,12 +782,11 @@
                             }
                             previousOnlineState[newM.mac] = currentOnline;
 
-                            // Preservar los logs diarios y líneas base locales si el servidor viene incompleto
                             let existingM = machines.find(x => x.mac === newM.mac);
                             if (existingM) {
                                 if (!newM.dailyLogs) newM.dailyLogs = existingM.dailyLogs;
-                                if (!newM.dayStartSales) newM.dayStartSales = existingM.dayStartSales;
-                                if (!newM.dailyBaselineDate) newM.dailyBaselineDate = existingM.dailyBaselineDate;
+                                if (newM.lastSalesCount === undefined) newM.lastSalesCount = existingM.lastSalesCount;
+                                if (!newM.lastResetDate) newM.lastResetDate = existingM.lastResetDate;
                             }
                         });
 
@@ -818,37 +816,45 @@
             machines.forEach(m => {
                 let currentSales = m.sales || 0;
                 
-                if (previousSalesState[m.mac] === undefined) {
-                    previousSalesState[m.mac] = currentSales;
+                // 🇨🇭 LÓGICA SUIZA INFALIBLE: CONTROL DE LÍNEA BASE POR FECHA (RESETEO DIARIO A LAS 00:00 HRS)
+                if (!m.dailyLogs) m.dailyLogs = {};
+                
+                if (!m.lastResetDate || m.lastResetDate !== todayStr) {
+                    m.lastResetDate = todayStr;
+                    // Al cambiar de día, fijamos el contador actual como el punto de partida (base 0 para hoy)
+                    m.lastSalesCount = currentSales;
+                    if (m.dailyLogs[todayStr] === undefined) {
+                        m.dailyLogs[todayStr] = 0;
+                    }
                 }
 
-                let prevSales = previousSalesState[m.mac];
+                if (m.lastSalesCount === undefined) {
+                    m.lastSalesCount = currentSales;
+                }
 
-                if (currentSales > prevSales) {
-                    let diff = currentSales - prevSales;
+                // Si la máquina acumuló más ventas que el último registro conocido, calculamos el incremento real (diff)
+                if (currentSales > m.lastSalesCount) {
+                    let diff = currentSales - m.lastSalesCount;
                     let coinsCount = Math.floor(diff / 100); 
                     for (let i = 0; i < coinsCount; i++) {
                         setTimeout(() => playCoinDropSound(), i * 200); 
                     }
                     triggerGreenPulse(m.mac);
+
+                    m.dailyLogs[todayStr] = (m.dailyLogs[todayStr] || 0) + diff;
+                    m.lastSalesCount = currentSales;
+                } else if (currentSales < m.lastSalesCount) {
+                    // Si el contador se reinició en hardware o bajó, ajustamos la base sin romper
+                    m.lastSalesCount = currentSales;
                 }
-                previousSalesState[m.mac] = currentSales;
-
-                // 🇨🇭 MOTOR ESTABLE DE VENTA DIARIA (USANDO LA VARIABLE REAL DE TELEMETRÍA M.SALES CON RESETEO DE MEDIANOCHE)
-                if (!m.dailyBaselineDate || m.dailyBaselineDate !== todayStr) {
-                    m.dailyBaselineDate = todayStr;
-                    m.dayStartSales = currentSales;
-                }
-
-                let machineTodaySales = Math.max(0, currentSales - (m.dayStartSales !== undefined ? m.dayStartSales : currentSales));
-                if (!m.dailyLogs) m.dailyLogs = {};
-                m.dailyLogs[todayStr] = machineTodaySales;
-
-                totalDaily += machineTodaySales;
 
                 let isOnline = m.is_online !== false;
                 if (isOnline) onlineCount++;
+                
+                let machineTodaySales = (m.dailyLogs && m.dailyLogs[todayStr]) ? m.dailyLogs[todayStr] : 0;
+                totalDaily += machineTodaySales;
 
+                // Caja Global / Dinero Registrado (Contador Físico Acumulado hasta vaciar box)
                 let cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
                 let telemetryPulses = Math.floor(currentSales / 100);
                 let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
