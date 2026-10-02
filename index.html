@@ -1462,11 +1462,10 @@
             let totalRecaudado = 0;
             let tableRows = '';
             machines.forEach(m => {
-                let cInit = m.coinInitial !== > 15000 ? m.coinInitial : 3768; // kept logic safe
-                let cInitVal = m.coinInitial !== undefined ? m.coinInitial : 3768;
+                let cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
                 let telemetryPulses = Math.floor((m.sales || 0) / 100);
-                let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInitVal + telemetryPulses);
-                let cDelta = Math.max(0, cFinal - cInitVal);
+                let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
+                let cDelta = Math.max(0, cFinal - cInit);
                 let recMachine = cDelta * 100;
                 totalRecaudado += recMachine;
                 tableRows += `<tr><td><b>${m.name}</b></td><td>$${recMachine.toLocaleString()}</td><td>${m.active ? 'Activa' : 'Pausada'}</td></tr>`;
