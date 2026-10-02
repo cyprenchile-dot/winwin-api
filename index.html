@@ -825,7 +825,7 @@
                 }
                 previousSalesState[m.mac] = currentSales;
 
-                // 🇨🇭 MOTOR RELOJ SUIZO PERFECTO: VENTA DEL DÍA = INCREMENTO DEL DINERO REGISTRADO EN VIVO
+                // 🇨🇭 MOTOR RELOJ SUIZO: VENTA DEL DÍA VINCULADA AL INCREMENTO EN TIEMPO REAL
                 if (m.coinInitial === undefined) m.coinInitial = 3768;
                 let cInit = m.coinInitial;
                 let telemetryPulses = Math.floor((m.sales || 0) / 100);
@@ -835,10 +835,14 @@
 
                 if (!m.dailyLogs) m.dailyLogs = {};
 
-                // Inicializar la base de inicio del día exactamente igual al contador físico inicial o al valor a las 00:00
+                // Inicializar la base de inicio del día exactamente al arrancar o cambiar de fecha
                 if (!m.dayStartDineroDate || m.dayStartDineroDate !== todayStr) {
                     m.dayStartDineroDate = todayStr;
-                    m.dayStartDinero = dineroRegistradoTotal; // El efectivo registrado al arrancar el día
+                    m.dayStartDinero = dineroRegistradoTotal; 
+                    // Guardamos también las ventas incrementales acumuladas para este día en 0 si no existen
+                    if (m.dailyLogs[todayStr] === undefined) {
+                        m.dailyLogs[todayStr] = 0;
+                    }
                 }
 
                 // Si por vaciado de caja o reseteo la base es mayor al total actual, se ajusta
@@ -846,8 +850,16 @@
                     m.dayStartDinero = dineroRegistradoTotal;
                 }
 
-                // Venta del día es 100% idéntica al incremento del dinero registrado hoy
+                // ⚡ VENTA DEL DÍA = LO QUE CRECIÓ EL DINERO REGISTRADO DESDE EL INICIO DE HOY + CUALQUIER INCREMENTO NUEVO EN VIVO
                 let machineTodaySales = Math.max(0, dineroRegistradoTotal - m.dayStartDinero);
+                
+                // Si detectamos incremento en tiempo real de m.sales o cDelta, aseguramos que se refleje inmediatamente
+                let incrementalGrowth = Math.max(0, dineroRegistradoTotal - (m.lastRecordedDinero || dineroRegistradoTotal));
+                if (incrementalGrowth > 0) {
+                    machineTodaySales += incrementalGrowth;
+                }
+                m.lastRecordedDinero = dineroRegistradoTotal;
+
                 m.dailyLogs[todayStr] = machineTodaySales;
 
                 totalDaily += machineTodaySales;
@@ -1357,7 +1369,7 @@
                         m.sales = 0;
                         m.box = 0;
                         m.lastSalesCount = 0;
-                        m.dayStartPulses = cDelta; // Reiniciar base del día
+                        m.dayStartDinero = dineroRecaudado; // Reiniciar base del día
                     }
                 });
                 logAuditEvent("CIERRE DE CAJA GLOBAL", "Toda la Flota", operador, `Monto total retirado: $${totalGlobalRecaudado.toLocaleString()} CLP`);
@@ -1402,7 +1414,7 @@
             m.sales = 0;
             m.box = 0;
             m.lastSalesCount = 0;
-            m.dayStartPulses = cDelta; // Reiniciar base del día
+            m.dayStartDinero = dineroRegistradoTotal; // Reiniciar base del día
             playAlertAlarmSound(true);
             logAuditEvent("CIERRE DE CAJA INDIVIDUAL", m.name, operador, `Recaudado: $${dineroRecaudado.toLocaleString()} CLP`);
             updateUI();
