@@ -636,6 +636,17 @@
                     let pA = JSON.parse(localAudit);
                     if (Array.isArray(pA)) auditLogs = pA;
                 }
+
+                // 🛡️ RED DE SEGURIDAD ABSOLUTA: SI NO HAY MÁQUINAS EN MEMORIA, RESTAURAMOS TU FLOTA EXACTA
+                if (machines.length === 0) {
+                    machines = [
+                        { mac: "24:6F:28:01:02:03", name: "MG-001", location: "CAFÉ AKANE", lat: -33.4489, lng: -70.6693, sales: 6600, prizes: 0, wifi: -53, active: true, is_online: false, coinInitial: 3759, prizeInitial: 100, dailyLogs: {"2026-10-02": 10500, "2026-10-01": 5100, "2026-09-30": 3200}, withdrawalHistory: [] },
+                        { mac: "8C:8C:29:EE:87:1C", name: "MG-002", location: "Happy House", lat: -33.4500, lng: -70.6600, sales: 3000, prizes: 13, wifi: -60, active: true, is_online: false, coinInitial: 495, prizeInitial: 19, dailyLogs: {"2026-10-02": 4500}, withdrawalHistory: [] },
+                        { mac: "20:50:0D:8C:27:A8", name: "MG-005", location: "ARAMCO CHICUREO", lat: -33.3000, lng: -70.7000, sales: 2000, prizes: 0, wifi: -58, active: true, is_online: true, coinInitial: 574, prizeInitial: 16, dailyLogs: {"2026-10-02": 2500, "2026-10-01": 2000}, withdrawalHistory: [] },
+                        { mac: "20:50:0D:1A:23:B4", name: "MG-004", location: "ARAMCO CHICUREO", lat: -33.3100, lng: -70.7100, sales: 1200, prizes: 0, wifi: -62, active: true, is_online: true, coinInitial: 2594, prizeInitial: 635, dailyLogs: {"2026-10-02": 1200, "2026-10-01": 2300}, withdrawalHistory: [] }
+                    ];
+                    saveToLocalStorage();
+                }
                 updateUI();
             } catch (e) {
                 console.log("Error cargando LocalStorage", e);
@@ -719,6 +730,36 @@
             return html;
         }
 
+        function getWifiDetails(dBm) {
+            let val = dBm || -50;
+            if (val >= -55) return { label: 'Excelente', color: '#10b981', level: 4 };
+            if (val >= -65) return { label: 'Muy buena', color: '#34d399', level: 3 };
+            if (val >= -75) return { label: 'Buena', color: '#3b82f6', level: 2 };
+            if (val >= -85) return { label: 'Regular', color: '#f59e0b', level: 1 };
+            if (val >= -95) return { label: 'Débil', color: '#f97316', level: 0.5 };
+            return { label: 'Nula', color: '#ef4444', level: 0 };
+        }
+
+        function formatWifiVisual(dBm) {
+            let info = getWifiDetails(dBm);
+            let activeBars = info.level === 4 ? 4 : (info.level === 3 ? 3 : (info.level === 2 ? 2 : (info.level === 1 ? 1 : (info.level === 0.5 ? 1 : 0))));
+            let html = `
+                <div class="wifi-visual-container">
+                    <div class="wifi-header-row">
+                        <span style="color: ${info.color}; font-weight: 800;">${info.label}</span>
+                        <span style="font-size: 0.65rem; color: var(--text-muted);">${dBm || -50} dBm</span>
+                    </div>
+                    <div class="wifi-bars">
+                        <div class="wifi-bar" style="background: ${activeBars >= 1 ? info.color : 'rgba(255,255,255,0.15)'}; height: 4px;"></div>
+                        <div class="wifi-bar" style="background: ${activeBars >= 2 ? info.color : 'rgba(255,255,255,0.15)'}; height: 7px;"></div>
+                        <div class="wifi-bar" style="background: ${activeBars >= 3 ? info.color : 'rgba(255,255,255,0.15)'}; height: 10px;"></div>
+                        <div class="wifi-bar" style="background: ${activeBars >= 4 ? info.color : 'rgba(255,255,255,0.15)'}; height: 14px;"></div>
+                    </div>
+                </div>
+            `;
+            return html;
+        }
+
         function saveStateAndSync() {
             saveToLocalStorage();
             fetch('https://winwin-api-v2.onrender.com/api/sync-fleet', {
@@ -733,8 +774,7 @@
                 const response = await fetch('https://winwin-api-v2.onrender.com/api/sync-fleet', { signal: AbortSignal.timeout(5000) });
                 if(response.ok) {
                     const data = await response.json();
-                    if(data && Array.isArray(data.machines)) {
-                        
+                    if(data && Array.isArray(data.machines) && data.machines.length > 0) {
                         data.machines.forEach(newM => {
                             let oldOnline = previousOnlineState[newM.mac];
                             let currentOnline = newM.is_online !== false;
@@ -744,9 +784,7 @@
                             previousOnlineState[newM.mac] = currentOnline;
                         });
 
-                        if (data.machines.length > 0 || machines.length === 0) {
-                            machines = data.machines;
-                        }
+                        machines = data.machines;
                         if(data.dailyLedger) dailyLedger = data.dailyLedger;
                         if(data.auditLogs && Array.isArray(data.auditLogs)) auditLogs = data.auditLogs;
                         saveToLocalStorage();
@@ -788,7 +826,7 @@
                 }
                 previousSalesState[m.mac] = currentSales;
 
-                // 🛡️ CORRECCIÓN ABSOLUTA: BASELINE DIARIO POR FECHA (INICIALIZA EN 0 AL CAMBIAR DE DÍA O RECONECTAR)
+                // 🛡️ REGLA SUIZA DE CERO FANTASMAS: BASELINE DIARIO POR FECHA
                 if (!m.dailyBaselineDate || m.dailyBaselineDate !== todayStr) {
                     m.dailyBaselineDate = todayStr;
                     m.dayStartSales = currentSales;
