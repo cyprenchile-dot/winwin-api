@@ -773,7 +773,6 @@
                 const response = await fetch('https://winwin-api-v2.onrender.com/api/sync-fleet', { signal: AbortSignal.timeout(5000) });
                 if(response.ok) {
                     const data = await response.json();
-                    // 🛡️ BLINDAJE ABSOLUTO: NUNCA SOBRESCRIBIR LOCAL CON UN SERVIDOR VACÍO O CON MENOS DATOS
                     if(data && Array.isArray(data.machines) && data.machines.length > 0) {
                         data.machines.forEach(newM => {
                             let oldOnline = previousOnlineState[newM.mac];
@@ -784,7 +783,6 @@
                             previousOnlineState[newM.mac] = currentOnline;
                         });
 
-                        // Fusionar inteligentemente manteniendo los datos más actualizados
                         machines = data.machines;
                         if(data.dailyLedger) dailyLedger = data.dailyLedger;
                         if(data.auditLogs && Array.isArray(data.auditLogs)) auditLogs = data.auditLogs;
@@ -827,18 +825,25 @@
                 }
                 previousSalesState[m.mac] = currentSales;
 
-                // 🇨🇭 LÓGICA DE RELOJ SUIZO: VINCULACIÓN DIRECTA DEL CONTADOR FÍSICO A LA VENTA DEL DÍA
+                // 🇨🇭 CORRECCIÓN INFALIBLE DE RELOJ SUIZO (Venta Día = Dinero Registrado del Día Actual)
                 let cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
                 let telemetryPulses = Math.floor(currentSales / 100);
                 let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
                 
-                // Inicializar la base de monedas de hoy solo si cambia el día o no existe
-                if (!m.dailyBaselineDate || m.dailyBaselineDate !== todayStr) {
-                    m.dailyBaselineDate = todayStr;
-                    m.dayStartCoins = cFinal;
+                // Si el día cambió, guardamos el contador final de ayer como la base de inicio de hoy
+                if (!m.lastRecordedDate || m.lastRecordedDate !== todayStr) {
+                    // Al arrancar un nuevo día, el punto de partida es el contador que traía la máquina
+                    m.dayStartCoins = m.lastKnownFinal !== undefined ? m.lastKnownFinal : cInit;
+                    m.lastRecordedDate = todayStr;
+                } else if (m.dayStartCoins === undefined) {
+                    m.dayStartCoins = cInit;
                 }
 
-                let coinsToday = Math.max(0, cFinal - (m.dayStartCoins !== undefined ? m.dayStartCoins : cFinal));
+                // Guardar siempre el estado actual del contador final
+                m.lastKnownFinal = cFinal;
+
+                // Venta de hoy es exactamente el delta de monedas acumuladas desde las 00:00 hrs de hoy
+                let coinsToday = Math.max(0, cFinal - m.dayStartCoins);
                 let machineTodaySales = coinsToday * 100;
 
                 if (!m.dailyLogs) m.dailyLogs = {};
