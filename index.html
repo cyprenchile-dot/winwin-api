@@ -912,9 +912,6 @@
                 cardEl.style.borderLeft = `3px solid ${avgBorderColor}`;
             }
 
-            let efficiency = totalPrizes > 0 ? Math.min(100, Math.round((totalPrizes * 500 / (totalDaily || 1)) * 100)) : 0;
-            document.getElementById('fleet-efficiency').innerText = `${efficiency}%`;
-
             renderMachineBoxes(machines);
             renderLedger();
             renderAuditLog();
