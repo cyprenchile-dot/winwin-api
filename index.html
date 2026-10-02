@@ -274,7 +274,7 @@
             <div class="value" id="box-total">$0 CLP</div>
             <div class="subtext">Acumulado hasta retiro</div>
         </div>
-        <!-- VISOR COMERCIAL DE VENTA PROMEDIO / MÁQUINA (RANGO EQUILIBRADO INTERMEDIO) -->
+        <!-- VISOR COMERCIAL DE VENTA PROMEDIO / MÁQUINA (EXCELENTE > $15k) -->
         <div class="card" id="avg-performance-card" style="border-left: 3px solid var(--accent-green);">
             <h3>Venta Promedio / Máquina</h3>
             <div class="value" id="avg-machine-sales">$0 CLP</div>
@@ -547,7 +547,6 @@
             }
         }
 
-        // 🚨 ALARMA ACÚSTICA CATEGÓRICA, NOTORIA Y DIFERENCIADA PARA ONLINE / OFFLINE
         function playAlertAlarmSound(isOnline) {
             if (!soundEnabled) return;
             try {
@@ -797,7 +796,7 @@
 
             updateDailyLedgerArchive(totalDaily, totalPrizes, todayStr);
 
-            // CÁLCULO DE VENTA PROMEDIO / MÁQUINA (RANGOS INTERMEDIOS EQUILIBRADOS)
+            // CÁLCULO DE VENTA PROMEDIO / MÁQUINA (EXCELENTE > $15k)
             let avgPerMachine = machines.length > 0 ? totalDaily / machines.length : 0;
             let avgStatusText = "";
             let avgStatusColor = "";
@@ -807,16 +806,28 @@
                 avgStatusText = "👑 EXCELENTE (> $15k)";
                 avgStatusColor = "#10b981";
                 avgBorderColor = "#10b981";
-            } else if (avgPerMachine >= 10000) {
-                avgStatusText = "⚡ MUY BUENO ($10k - $15k)";
+            } else if (avgPerMachine >= 13000) {
+                avgStatusText = "⭐ SOBRESALIENTE ($13k - $15k)";
+                avgStatusColor = "#34d399";
+                avgBorderColor = "#34d399";
+            } else if (avgPerMachine >= 11000) {
+                avgStatusText = "⚡ MUY BUENO ($11k - $12.9k)";
                 avgStatusColor = "#3b82f6";
                 avgBorderColor = "#3b82f6";
-            } else if (avgPerMachine >= 6000) {
-                avgStatusText = "⚠️ REGULAR ($6k - $9.9k)";
+            } else if (avgPerMachine >= 9000) {
+                avgStatusText = "🔹 BUENO ($9k - $10.9k)";
+                avgStatusColor = "#60a5fa";
+                avgBorderColor = "#60a5fa";
+            } else if (avgPerMachine >= 7000) {
+                avgStatusText = "⚠️ REGULAR ($7k - $8.9k)";
                 avgStatusColor = "#f59e0b";
                 avgBorderColor = "#f59e0b";
+            } else if (avgPerMachine >= 4000) {
+                avgStatusText = "📉 BAJO ($4k - $6.9k)";
+                avgStatusColor = "#f97316";
+                avgBorderColor = "#f97316";
             } else {
-                avgStatusText = "🚨 BAJO / CRÍTICO (< $6k)";
+                avgStatusText = "🚨 CRÍTICO (< $4k)";
                 avgStatusColor = "#ef4444";
                 avgBorderColor = "#ef4444";
             }
@@ -826,7 +837,7 @@
             document.getElementById('total-prizes').innerText = `${totalPrizes} un.`;
             document.getElementById('active-terminals').innerText = onlineCount;
             
-            // Actualizar tarjeta superior de Venta Promedio / Máquina con rangos equilibrados
+            // Actualizar tarjeta superior de Venta Promedio / Máquina con Excelente > $15k
             document.getElementById('avg-machine-sales').innerText = `$${Math.round(avgPerMachine).toLocaleString()} CLP`;
             let statusEl = document.getElementById('avg-machine-status');
             if(statusEl) {
@@ -1451,10 +1462,11 @@
             let totalRecaudado = 0;
             let tableRows = '';
             machines.forEach(m => {
-                let cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
+                let cInit = m.coinInitial !== > 15000 ? m.coinInitial : 3768; // kept logic safe
+                let cInitVal = m.coinInitial !== undefined ? m.coinInitial : 3768;
                 let telemetryPulses = Math.floor((m.sales || 0) / 100);
-                let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
-                let cDelta = Math.max(0, cFinal - cInit);
+                let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInitVal + telemetryPulses);
+                let cDelta = Math.max(0, cFinal - cInitVal);
                 let recMachine = cDelta * 100;
                 totalRecaudado += recMachine;
                 tableRows += `<tr><td><b>${m.name}</b></td><td>$${recMachine.toLocaleString()}</td><td>${m.active ? 'Activa' : 'Pausada'}</td></tr>`;
