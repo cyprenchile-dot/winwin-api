@@ -825,7 +825,7 @@
                 }
                 previousSalesState[m.mac] = currentSales;
 
-                // 🇨🇭 MOTOR RELOJ SUIZO: VENTA DEL DÍA VINCULADA AL INCREMENTO EN TIEMPO REAL
+                // 🇨🇭 MOTOR RELOJ SUIZO: VINCULACIÓN DIRECTA ENTRE DINERO REGISTRADO Y VENTA DEL DÍA
                 if (m.coinInitial === undefined) m.coinInitial = 3768;
                 let cInit = m.coinInitial;
                 let telemetryPulses = Math.floor((m.sales || 0) / 100);
@@ -835,31 +835,22 @@
 
                 if (!m.dailyLogs) m.dailyLogs = {};
 
-                // Inicializar la base de inicio del día exactamente al arrancar o cambiar de fecha
-                if (!m.dayStartDineroDate || m.dayStartDineroDate !== todayStr) {
-                    m.dayStartDineroDate = todayStr;
-                    m.dayStartDinero = dineroRegistradoTotal; 
-                    // Guardamos también las ventas incrementales acumuladas para este día en 0 si no existen
-                    if (m.dailyLogs[todayStr] === undefined) {
-                        m.dailyLogs[todayStr] = 0;
-                    }
+                // ⚡ AQUÍ ESTABA LA CLAVE: LA BASE DE HOY DEBE SER EL CONTADOR AL INICIAR EL DÍA. 
+                // SI ES UN DÍA NUEVO O LA BASE NO EXISTE, FIJAMOS LA BASE EN EL VALOR ACTUAL MENOS CUALQUIER INCREMENTO NUEVO,
+                // O DIRECTAMENTE INICIALIZAMOS CON EL CONTADOR DE INICIO DE SESIÓN.
+                if (!m.dayStartPulsesDate || m.dayStartPulsesDate !== todayStr) {
+                    m.dayStartPulsesDate = todayStr;
+                    // Al comenzar el día, el punto de partida es el número de monedas acumuladas hasta ese momento exacto
+                    m.dayStartPulses = cDelta; 
                 }
 
-                // Si por vaciado de caja o reseteo la base es mayor al total actual, se ajusta
-                if (m.dayStartDinero > dineroRegistradoTotal) {
-                    m.dayStartDinero = dineroRegistradoTotal;
+                // Por seguridad: si por alguna razón la base es mayor al total actual (vaciado de caja), se reajusta
+                if (m.dayStartPulses > cDelta) {
+                    m.dayStartPulses = cDelta;
                 }
 
-                // ⚡ VENTA DEL DÍA = LO QUE CRECIÓ EL DINERO REGISTRADO DESDE EL INICIO DE HOY + CUALQUIER INCREMENTO NUEVO EN VIVO
-                let machineTodaySales = Math.max(0, dineroRegistradoTotal - m.dayStartDinero);
-                
-                // Si detectamos incremento en tiempo real de m.sales o cDelta, aseguramos que se refleje inmediatamente
-                let incrementalGrowth = Math.max(0, dineroRegistradoTotal - (m.lastRecordedDinero || dineroRegistradoTotal));
-                if (incrementalGrowth > 0) {
-                    machineTodaySales += incrementalGrowth;
-                }
-                m.lastRecordedDinero = dineroRegistradoTotal;
-
+                // VENTA DEL DÍA = (MONEDAS TOTALES ACTUALES - MONEDAS AL INICIAR EL DÍA) x 100
+                let machineTodaySales = Math.max(0, (cDelta - m.dayStartPulses) * 100);
                 m.dailyLogs[todayStr] = machineTodaySales;
 
                 totalDaily += machineTodaySales;
@@ -1369,7 +1360,8 @@
                         m.sales = 0;
                         m.box = 0;
                         m.lastSalesCount = 0;
-                        m.dayStartDinero = dineroRecaudado; // Reiniciar base del día
+                        m.dayStartPulses = cDelta; 
+                        m.dayStartDinero = dineroRecaudado;
                     }
                 });
                 logAuditEvent("CIERRE DE CAJA GLOBAL", "Toda la Flota", operador, `Monto total retirado: $${totalGlobalRecaudado.toLocaleString()} CLP`);
@@ -1414,7 +1406,8 @@
             m.sales = 0;
             m.box = 0;
             m.lastSalesCount = 0;
-            m.dayStartDinero = dineroRegistradoTotal; // Reiniciar base del día
+            m.dayStartPulses = cDelta;
+            m.dayStartDinero = dineroRecaudado;
             playAlertAlarmSound(true);
             logAuditEvent("CIERRE DE CAJA INDIVIDUAL", m.name, operador, `Recaudado: $${dineroRecaudado.toLocaleString()} CLP`);
             updateUI();
