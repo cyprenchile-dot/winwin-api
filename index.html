@@ -774,16 +774,28 @@
                 if(response.ok) {
                     const data = await response.json();
                     if(data && Array.isArray(data.machines) && data.machines.length > 0) {
-                        data.machines.forEach(newM => {
-                            let oldOnline = previousOnlineState[newM.mac];
-                            let currentOnline = newM.is_online !== false;
-                            if (oldOnline !== undefined && oldOnline !== currentOnline) {
-                                playAlertAlarmSound(currentOnline);
+                        data.machines.forEach(serverM => {
+                            let localM = machines.find(x => x.mac === serverM.mac);
+                            if (localM) {
+                                let oldSales = localM.sales || 0;
+                                localM.sales = serverM.sales;
+                                localM.is_online = serverM.is_online;
+                                localM.wifi = serverM.wifi;
+                                if(serverM.name) localM.name = serverM.name;
+                                if(serverM.location) localM.location = serverM.location;
+
+                                if (localM.sales > oldSales) {
+                                    let diff = localM.sales - oldSales;
+                                    let todayStr = getChileDateStr();
+                                    if (!localM.dailyLogs) localM.dailyLogs = {};
+                                    localM.dailyLogs[todayStr] = (localM.dailyLogs[todayStr] || 0) + diff;
+                                    triggerGreenPulse(localM.mac);
+                                }
+                            } else {
+                                machines.push(serverM);
                             }
-                            previousOnlineState[newM.mac] = currentOnline;
                         });
 
-                        machines = data.machines;
                         if(data.dailyLedger) dailyLedger = data.dailyLedger;
                         if(data.auditLogs && Array.isArray(data.auditLogs)) auditLogs = data.auditLogs;
                         saveToLocalStorage();
@@ -815,8 +827,15 @@
 
                 let prevSales = previousSalesState[m.mac];
 
+                if (!m.dailyLogs) m.dailyLogs = {};
+                if (m.dailyLogs[todayStr] === undefined) {
+                    m.dailyLogs[todayStr] = 0;
+                }
+
                 if (currentSales > prevSales) {
                     let diff = currentSales - prevSales;
+                    m.dailyLogs[todayStr] += diff;
+
                     let coinsCount = Math.floor(diff / 100); 
                     for (let i = 0; i < coinsCount; i++) {
                         setTimeout(() => playCoinDropSound(), i * 200); 
@@ -825,7 +844,7 @@
                 }
                 previousSalesState[m.mac] = currentSales;
 
-                // 🇨🇭 MOTOR RELOJ SUIZO: VINCULACIÓN DIRECTA ENTRE DINERO REGISTRADO Y VENTA DEL DÍA
+                // Dinero Registrado (Caja Física) basado estrictamente en contadores mecánicos
                 if (m.coinInitial === undefined) m.coinInitial = 3768;
                 let cInit = m.coinInitial;
                 let telemetryPulses = Math.floor((m.sales || 0) / 100);
@@ -833,29 +852,10 @@
                 let cDelta = Math.max(0, cFinal - cInit);
                 let dineroRegistradoTotal = cDelta * 100;
 
-                if (!m.dailyLogs) m.dailyLogs = {};
-
-                // ⚡ SOLUCIÓN ABSOLUTA: 
-                // Cada máquina mantiene un registro de su valor base al iniciar el día ("dayStartDinero").
-                // Si la fecha cambia o no existe, guardamos el valor actual del dinero registrado como base de inicio de hoy.
-                if (!m.dayStartDineroDate || m.dayStartDineroDate !== todayStr) {
-                    m.dayStartDineroDate = todayStr;
-                    // Al arrancar el día, tomamos el dinero registrado actual como el punto cero de hoy
-                    m.dayStartDinero = dineroRegistradoTotal;
-                    // Si ya existían ventas en dailyLogs para hoy, las respetamos, de lo contrario inicializamos en 0
-                    if (m.dailyLogs[todayStr] === undefined) {
-                        m.dailyLogs[todayStr] = 0;
-                    }
-                }
-
-                // Si por alguna razón el dinero registrado total es menor que la base (ej. vaciado de caja), reajustamos la base
-                if (m.dayStartDinero > dineroRegistradoTotal) {
-                    m.dayStartDinero = dineroRegistradoTotal;
-                }
-
-                // 🚀 VENTA DEL DÍA = DINERO REGISTRADO TOTAL ACTUAL - DINERO REGISTRADO AL INICIAR EL DÍA
-                // De esta manera, todo lo que sube en VERDE se refleja instantáneamente y con la misma cantidad en TURQUESA.
-                let machineTodaySales = Math.max(0, dineroRegistradoTotal - m.dayStartDinero);
+                // ⚡ CORRECCIÓN DIRECTA Y ABSOLUTA: 
+                // La Venta del Día (Turquesa) debe ser exactamente igual al Dinero Registrado del día en curso.
+                // Si la máquina tiene dinero registrado, se asigna directamente a la venta de hoy (salvo que ya haya tenido un cierre previo).
+                let machineTodaySales = Math.max(0, dineroRegistradoTotal - (m.lastClosedBoxTotal || 0));
                 m.dailyLogs[todayStr] = machineTodaySales;
 
                 totalDaily += machineTodaySales;
@@ -1365,8 +1365,7 @@
                         m.sales = 0;
                         m.box = 0;
                         m.lastSalesCount = 0;
-                        m.dayStartPulses = cDelta; 
-                        m.dayStartDinero = dineroRecaudado;
+                        m.lastClosedBoxTotal = dineroRecaudado;
                     }
                 });
                 logAuditEvent("CIERRE DE CAJA GLOBAL", "Toda la Flota", operador, `Monto total retirado: $${totalGlobalRecaudado.toLocaleString()} CLP`);
@@ -1411,8 +1410,7 @@
             m.sales = 0;
             m.box = 0;
             m.lastSalesCount = 0;
-            m.dayStartPulses = cDelta;
-            m.dayStartDinero = dineroRecaudado;
+            m.lastClosedBoxTotal = dineroRecaudado;
             playAlertAlarmSound(true);
             logAuditEvent("CIERRE DE CAJA INDIVIDUAL", m.name, operador, `Recaudado: $${dineroRecaudado.toLocaleString()} CLP`);
             updateUI();
