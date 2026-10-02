@@ -825,26 +825,30 @@
                 }
                 previousSalesState[m.mac] = currentSales;
 
-                // 🛡️ CORRECCIÓN SUIZA: VENTA DEL DÍA DERIVADA DIRECTAMENTE DE LOS PULSOS NUEVOS (DINERO REGISTRADO)
+                // 🇨🇭 MOTOR RELOJ SUIZO: VENTA DEL DÍA VINCULADA AL INCREMENTO DEL DINERO REGISTRADO
                 if (m.coinInitial === undefined) m.coinInitial = 3768;
                 let cInit = m.coinInitial;
-                let telemetryPulses = Math.floor(currentSales / 100);
+                let telemetryPulses = Math.floor((m.sales || 0) / 100);
                 let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
                 let cDelta = Math.max(0, cFinal - cInit);
                 let dineroRegistradoTotal = cDelta * 100;
 
-                // Inicializar registro del día si no existe
                 if (!m.dailyLogs) m.dailyLogs = {};
-                
-                // Si es la primera vez que vemos esta fecha, registramos la base mecánica de inicio del día
-                if (!m.dayStartDinero || m.dayStartDineroDate !== todayStr) {
-                    m.dayStartDineroDate = todayStr;
-                    // Guardamos cuánto dinero registrado había al iniciar este día
-                    m.dayStartDinero = dineroRegistradoTotal;
+
+                // Inicializar la base de inicio del día usando el contador físico actual si no existe o cambió la fecha
+                if (!m.dayStartPulsesDate || m.dayStartPulsesDate !== todayStr) {
+                    m.dayStartPulsesDate = todayStr;
+                    m.dayStartPulses = cDelta; // Pulsos mecánicos al arrancar el día
                 }
 
-                // La venta del día es estrictamente lo que aumentó el dinero registrado desde que empezó el día
-                let machineTodaySales = Math.max(0, dineroRegistradoTotal - (m.dayStartDinero !== undefined ? m.dayStartDinero : dineroRegistradoTotal));
+                // Si por alguna razón la base es mayor que el delta actual (ej. vaciado de caja), reajustamos
+                if (m.dayStartPulses > cDelta) {
+                    m.dayStartPulses = cDelta;
+                }
+
+                let pulsesToday = cDelta - m.dayStartPulses;
+                let machineTodaySales = pulsesToday * 100;
+
                 m.dailyLogs[todayStr] = machineTodaySales;
 
                 totalDaily += machineTodaySales;
@@ -1354,6 +1358,7 @@
                         m.sales = 0;
                         m.box = 0;
                         m.lastSalesCount = 0;
+                        m.dayStartPulses = cDelta; // Reiniciar base del día
                     }
                 });
                 logAuditEvent("CIERRE DE CAJA GLOBAL", "Toda la Flota", operador, `Monto total retirado: $${totalGlobalRecaudado.toLocaleString()} CLP`);
@@ -1398,6 +1403,7 @@
             m.sales = 0;
             m.box = 0;
             m.lastSalesCount = 0;
+            m.dayStartPulses = cDelta; // Reiniciar base del día
             playAlertAlarmSound(true);
             logAuditEvent("CIERRE DE CAJA INDIVIDUAL", m.name, operador, `Recaudado: $${dineroRecaudado.toLocaleString()} CLP`);
             updateUI();
