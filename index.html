@@ -41,12 +41,12 @@
 
         /* CONTADORES DESTACADOS - COMANDO CENTRAL */
         .metrics-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 15px; }
-        @media(min-width: 768px) { .metrics-grid { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; } }
+        @media(min-width: 768px) { .metrics-grid { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; } }
 
         .card { background: var(--card-bg); padding: 14px; border-radius: 12px; border: 1px solid var(--border-color); position: relative; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
-        .card h3 { font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 6px; letter-spacing: 0.5px; }
-        .card .value { font-size: 1.25rem; font-weight: 800; color: #fff; text-shadow: 0 2px 4px rgba(0,0,0,0.3); }
-        .card .subtext { font-size: 0.6rem; color: var(--accent-green); margin-top: 4px; font-weight: 600; }
+        .card h3 { font-size: 0.58rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 6px; letter-spacing: 0.5px; }
+        .card .value { font-size: 1.2rem; font-weight: 800; color: #fff; text-shadow: 0 2px 4px rgba(0,0,0,0.3); }
+        .card .subtext { font-size: 0.58rem; color: var(--accent-green); margin-top: 4px; font-weight: 600; }
 
         /* ESTILO CONTADOR MECÁNICO INDUSTRIAL */
         .mechanical-counter-box {
@@ -253,8 +253,14 @@
             <div class="value" id="avg-machine-sales">$0 CLP</div>
             <div class="subtext" id="avg-machine-status" style="color: var(--accent-green);">Calculando...</div>
         </div>
-        <!-- NUEVA MÉTRICA NIVEL ELON: VELOCIDAD DE CAJA (CLP/HORA) -->
-        <div class="card" style="border-left: 3px solid var(--accent-purple);">
+        <!-- NUEVO INDICADOR NIVEL ELON: % MÁQUINAS OPERATIVAS -->
+        <div class="card gerencia-only" style="border-left: 3px solid var(--accent-green);">
+            <h3>Flota Operativa</h3>
+            <div class="value" id="fleet-operational-percent">0%</div>
+            <div class="subtext" id="fleet-operational-subtext">0 de 0 online</div>
+        </div>
+        <!-- NUEVO INDICADOR NIVEL ELON: VELOCIDAD DE CAJA -->
+        <div class="card gerencia-only" style="border-left: 3px solid var(--accent-purple);">
             <h3>Velocidad de Caja</h3>
             <div class="value" id="cash-velocity">$0 / hr</div>
             <div class="subtext">Flujo por hora operativa</div>
@@ -263,11 +269,6 @@
             <h3>Premios Totales Flota</h3>
             <div class="value" id="total-prizes">0 un.</div>
             <div class="subtext">Registro Manual (Físico)</div>
-        </div>
-        <div class="card gerencia-only" style="border-left: 3px solid var(--accent-green);">
-            <h3>Eficiencia Flota</h3>
-            <div class="value" id="fleet-efficiency">0%</div>
-            <div class="subtext">Ratio venta/premio</div>
         </div>
     </div>
 
@@ -286,7 +287,7 @@
         <div id="dashboard-map"></div>
     </div>
 
-    <!-- ANALYTICS - GRÁFICO NIVEL DIOS (COMBINADO BARRAS + LÍNEA PROMEDIO) -->
+    <!-- ANALYTICS - GRÁFICO MAESTRO DUAL-AXIS -->
     <div class="analytics-grid gerencia-only">
         <div class="analytics-card">
             <div class="analytics-header">
@@ -336,7 +337,7 @@
     <!-- MODAL DE EDICIÓN CON MAPA -->
     <div id="edit-modal" class="modal-overlay">
         <div class="edit-box">
-            <h2>✏️ Editar Terminal y Ubicación GPS</h2>
+            <h2>✏️️ Editar Terminal y Ubicación GPS</h2>
             <input type="hidden" id="edit-index">
             <div class="edit-group">
                 <label>Nombre de la Terminal:</label>
@@ -418,7 +419,7 @@
         let currentRole = 'gerencia';
         let soundEnabled = true;
 
-        // GRÁFICO MAESTRO DUAL-AXIS (BARRAS PARA VENTA TOTAL + LÍNEA PARA PROMEDIO POR MÁQUINA)
+        // GRÁFICO MAESTRO DUAL-AXIS CORRELACIONADO (BARRAS = VENTA TOTAL + LÍNEA = PROMEDIO POR MÁQUINA)
         const ctx = document.getElementById('salesChart').getContext('2d');
         const salesChart = new Chart(ctx, {
             type: 'bar',
@@ -789,7 +790,7 @@
                 totalPrizes += pDelta;
             });
 
-            // ⚡ MOTOR MAESTRO UNIFICADO: CONSOLIDA BITÁCORA Y GRÁFICO DUAL-AXIS DINÁMICO
+            // ⚡ MOTOR MAESTRO UNIFICADO DE PERSISTENCIA Y GRÁFICO DUAL CORRELACIONADO
             rebuildMasterLedgerAndChart(totalDaily);
 
             // CÁLCULO DE VENTA PROMEDIO / MÁQUINA (EXCELENTE > $15k)
@@ -828,16 +829,21 @@
                 avgBorderColor = "#ef4444";
             }
 
-            // 🚀 NUEVA MÉTRICA ELON: VELOCIDAD DE CAJA ESTIMADA POR HORA OPERATIVA
+            // MÉTRICAS ELON MUSK (VELOCIDAD DE CAJA Y % OPERATIVO)
             let currentHour = new Date().getHours();
-            let operationalHours = Math.max(1, currentHour - 8); // Asumiendo inicio jornada 08:00 hrs
+            let operationalHours = Math.max(1, currentHour - 8);
             let cashVelocity = Math.round(totalDaily / operationalHours);
+
+            let totalMachines = machines.length;
+            let operationalPercent = totalMachines > 0 ? Math.round((onlineCount / totalMachines) * 100) : 0;
 
             document.getElementById('daily-sales').innerText = `$${totalDaily.toLocaleString()} CLP`;
             document.getElementById('box-total').innerText = `$${totalBox.toLocaleString()} CLP`;
             document.getElementById('total-prizes').innerText = `${totalPrizes} un.`;
             document.getElementById('active-terminals').innerText = onlineCount;
             document.getElementById('cash-velocity').innerText = `$${cashVelocity.toLocaleString()} / hr`;
+            document.getElementById('fleet-operational-percent').innerText = `${operationalPercent}%`;
+            document.getElementById('fleet-operational-subtext').innerText = `${onlineCount} de ${totalMachines} online`;
             
             document.getElementById('avg-machine-sales').innerText = `$${Math.round(avgPerMachine).toLocaleString()} CLP`;
             let statusEl = document.getElementById('avg-machine-status');
@@ -859,11 +865,10 @@
             updateFleetMapMarkers(machines);
         }
 
-        // 🧠 MOTOR UNIFICADO: PERSISTENCIA TOTAL DE DÍAS Y GRÁFICO DUAL CORRELACIONADO
+        // 🧠 MOTOR UNIFICADO DE PERSISTENCIA Y GRÁFICO DUAL CORRELACIONADO CON DÍAS REALES
         function rebuildMasterLedgerAndChart(totalDaily) {
             let todayStr = getChileDateStr();
             
-            // 1. Asegurar que cada máquina tenga registrado el día actual en sus dailyLogs
             machines.forEach(m => {
                 if (!m.dailyLogs) m.dailyLogs = {};
                 if (m.dailyLogs[todayStr] === undefined) {
@@ -871,7 +876,6 @@
                 }
             });
 
-            // 2. Consolidar mapa global por fecha de todas las máquinas
             let dateMap = {};
             machines.forEach(m => {
                 if (m.dailyLogs) {
@@ -882,7 +886,6 @@
                 }
             });
 
-            // Forzar que el día de hoy refleje el total real actual de la flota
             dateMap[todayStr] = { total: totalDaily, prizes: machines.reduce((acc, m) => acc + (m.prizes || 0), 0) };
 
             dailyLedger = Object.keys(dateMap).map(date => ({
@@ -891,7 +894,7 @@
                 prizes: dateMap[date].prizes || 0
             })).sort((a, b) => b.date.localeCompare(a.date));
 
-            // 3. Alimentar Gráfico Maestro Dual con los últimos 7 días exactos
+            // Alimentar Gráfico Maestro Dual con los últimos 7 días exactos correlacionados
             let chartLabels = [];
             let chartBarData = [];
             let chartLineData = [];
@@ -913,8 +916,8 @@
             }
 
             salesChart.data.labels = chartLabels;
-            salesChart.data.datasets[0].data = chartBarData; // Barras de Venta Total
-            salesChart.data.datasets[1].data = chartLineData; // Línea de Promedio por Máquina
+            salesChart.data.datasets[0].data = chartBarData;
+            salesChart.data.datasets[1].data = chartLineData;
             salesChart.update();
             saveToLocalStorage();
         }
