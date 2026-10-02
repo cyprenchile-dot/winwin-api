@@ -335,7 +335,7 @@
     <!-- BITÁCORA MAESTRA DE AUDITORÍA FORENSE -->
     <div class="audit-card gerencia-only">
         <div class="analytics-header" style="margin-bottom: 4px;">
-            <h2>🛡️️ Bitácora Maestra de Auditoría Forense y Trazabilidad</h2>
+            <h2>🛡️ Bitácora Maestra de Auditoría Forense y Trazabilidad</h2>
             <span style="font-size: 0.65rem; color: var(--accent-yellow);">Doble persistencia (Servidor + LocalStorage)</span>
         </div>
         <div class="audit-table-container">
@@ -779,7 +779,7 @@
                             }
                             previousOnlineState[newM.mac] = currentOnline;
 
-                            // 🛡️ CORRECCIÓN CLAVE DE SINCRONIZACIÓN: FUSIONAR DATOS SERVER CON BASES LOCALES
+                            // Preservar estados locales críticos para que el servidor no sobrescriba las líneas base
                             let existingM = machines.find(item => item.mac === newM.mac);
                             if (existingM) {
                                 newM.dailyLogs = existingM.dailyLogs || {};
@@ -822,7 +822,7 @@
                 let cDelta = Math.max(0, cFinal - cInit);
                 let dineroRegistradoActual = cDelta * 100;
 
-                // Detección de sonido de monedas en vivo por incremento en el dinero registrado
+                // Sonido y pulso en vivo por incremento en el dinero registrado
                 if (previousSalesState[m.mac] === undefined) {
                     previousSalesState[m.mac] = dineroRegistradoActual;
                 }
@@ -840,8 +840,10 @@
 
                 if (!m.dailyLogs) m.dailyLogs = {};
 
-                // 🇨🇭 LÍNEA BASE DIARIA BLINDADA: Al cambiar de fecha en Chile (00:00 hrs), 
-                // guardamos el dinero registrado de arranque para el nuevo día.
+                // 🇨🇭 EL CORAZÓN DE LA SOLUCIÓN:
+                // Si la fecha actual de Chile cambió respecto al último registro de línea base, 
+                // establecemos el nuevo punto de partida exactamente igual al dinero registrado actual.
+                // Así, todo lo que ingrese desde este segundo en adelante formará parte de la venta de HOY.
                 if (!m.dailyBoxBaselineDate || m.dailyBoxBaselineDate !== todayStr) {
                     m.dailyBoxBaselineDate = todayStr;
                     m.dayStartBox = dineroRegistradoActual;
@@ -851,7 +853,7 @@
                     m.dayStartBox = dineroRegistradoActual;
                 }
 
-                // Venta del día = Crecimiento exacto del Dinero Registrado desde las 00:00 hrs de hoy
+                // Venta del día calculada de forma matemática estricta e infalible
                 let machineTodaySales = Math.max(0, dineroRegistradoActual - m.dayStartBox);
                 m.dailyLogs[todayStr] = machineTodaySales;
 
@@ -1362,6 +1364,7 @@
                         m.sales = 0;
                         m.box = 0;
                         m.lastSalesCount = 0;
+                        m.dayStartBox = dineroRecaudado;
                     }
                 });
                 logAuditEvent("CIERRE DE CAJA GLOBAL", "Toda la Flota", operador, `Monto total retirado: $${totalGlobalRecaudado.toLocaleString()} CLP`);
@@ -1406,6 +1409,7 @@
             m.sales = 0;
             m.box = 0;
             m.lastSalesCount = 0;
+            m.dayStartBox = dineroRecaudado;
             playAlertAlarmSound(true);
             logAuditEvent("CIERRE DE CAJA INDIVIDUAL", m.name, operador, `Recaudado: $${dineroRecaudado.toLocaleString()} CLP`);
             updateUI();
