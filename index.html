@@ -39,14 +39,14 @@
 
         .status-badge { background: rgba(16, 185, 129, 0.12); color: var(--accent-green); padding: 4px 10px; border-radius: 15px; font-size: 0.75rem; font-weight: bold; border: 1px solid rgba(16, 185, 129, 0.3); margin-left: auto; }
 
-        /* CONTADORES DESTACADOS */
+        /* CONTADORES DESTACADOS - COMANDO CENTRAL */
         .metrics-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 15px; }
-        @media(min-width: 768px) { .metrics-grid { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; } }
+        @media(min-width: 768px) { .metrics-grid { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; } }
 
-        .card { background: var(--card-bg); padding: 15px; border-radius: 12px; border: 1px solid var(--border-color); position: relative; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
-        .card h3 { font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 6px; letter-spacing: 0.5px; }
-        .card .value { font-size: 1.4rem; font-weight: 800; color: #fff; text-shadow: 0 2px 4px rgba(0,0,0,0.3); }
-        .card .subtext { font-size: 0.65rem; color: var(--accent-green); margin-top: 4px; font-weight: 600; }
+        .card { background: var(--card-bg); padding: 14px; border-radius: 12px; border: 1px solid var(--border-color); position: relative; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+        .card h3 { font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 6px; letter-spacing: 0.5px; }
+        .card .value { font-size: 1.25rem; font-weight: 800; color: #fff; text-shadow: 0 2px 4px rgba(0,0,0,0.3); }
+        .card .subtext { font-size: 0.6rem; color: var(--accent-green); margin-top: 4px; font-weight: 600; }
 
         /* ESTILO CONTADOR MECÁNICO INDUSTRIAL */
         .mechanical-counter-box {
@@ -87,33 +87,6 @@
             border-radius: 2px;
             border: 1px solid #1e293b;
             text-shadow: 0 0 5px rgba(56, 189, 248, 0.4);
-        }
-
-        /* ESTILOS WIFI VISUAL GRADUAL */
-        .wifi-visual-container {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-        .wifi-header-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 0.75rem;
-            font-weight: 700;
-        }
-        .wifi-bars {
-            display: flex;
-            gap: 3px;
-            align-items: flex-end;
-            height: 14px;
-            margin-top: 2px;
-        }
-        .wifi-bar {
-            width: 5px;
-            border-radius: 1px;
-            background: rgba(255,255,255,0.15);
-            transition: 0.3s;
         }
 
         /* SECCIÓN DE MÁQUINAS */
@@ -194,7 +167,7 @@
         .analytics-grid { display: grid; grid-template-columns: 1fr; gap: 15px; margin-bottom: 15px; }
         @media(min-width: 900px) { .analytics-grid { grid-template-columns: 1fr 1fr; } }
 
-        .analytics-card { background: var(--card-bg); padding: 15px; border-radius: 12px; border: 1px solid var(--border-color); box-shadow: 0 4px 10px rgba(0,0,0,0.2); display: flex; flex-direction: column; height: 260px; }
+        .analytics-card { background: var(--card-bg); padding: 15px; border-radius: 12px; border: 1px solid var(--border-color); box-shadow: 0 4px 10px rgba(0,0,0,0.2); display: flex; flex-direction: column; height: 280px; }
         .analytics-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
         .analytics-header h2 { font-size: 0.85rem; color: var(--text-main); font-weight: 600; }
 
@@ -274,11 +247,17 @@
             <div class="value" id="box-total">$0 CLP</div>
             <div class="subtext">Acumulado hasta retiro</div>
         </div>
-        <!-- VISOR COMERCIAL DE VENTA PROMEDIO / MÁQUINA (EXCELENTE > $15k) -->
+        <!-- VISOR COMERCIAL DE VENTA PROMEDIO / MÁQUINA -->
         <div class="card" id="avg-performance-card" style="border-left: 3px solid var(--accent-green);">
             <h3>Venta Promedio / Máquina</h3>
             <div class="value" id="avg-machine-sales">$0 CLP</div>
             <div class="subtext" id="avg-machine-status" style="color: var(--accent-green);">Calculando...</div>
+        </div>
+        <!-- NUEVA MÉTRICA NIVEL ELON: VELOCIDAD DE CAJA (CLP/HORA) -->
+        <div class="card" style="border-left: 3px solid var(--accent-purple);">
+            <h3>Velocidad de Caja</h3>
+            <div class="value" id="cash-velocity">$0 / hr</div>
+            <div class="subtext">Flujo por hora operativa</div>
         </div>
         <div class="card gerencia-only" style="border-left: 3px solid var(--accent-purple);">
             <h3>Premios Totales Flota</h3>
@@ -307,11 +286,11 @@
         <div id="dashboard-map"></div>
     </div>
 
-    <!-- ANALYTICS -->
+    <!-- ANALYTICS - GRÁFICO NIVEL DIOS (COMBINADO BARRAS + LÍNEA PROMEDIO) -->
     <div class="analytics-grid gerencia-only">
         <div class="analytics-card">
             <div class="analytics-header">
-                <h2>Tendencia de Venta Diaria</h2>
+                <h2>📈 Tendencia Maestro: Venta Total vs Promedio por Máquina</h2>
             </div>
             <div style="position: relative; flex-grow: 1;">
                 <canvas id="salesChart"></canvas>
@@ -439,27 +418,43 @@
         let currentRole = 'gerencia';
         let soundEnabled = true;
 
+        // GRÁFICO MAESTRO DUAL-AXIS (BARRAS PARA VENTA TOTAL + LÍNEA PARA PROMEDIO POR MÁQUINA)
         const ctx = document.getElementById('salesChart').getContext('2d');
         const salesChart = new Chart(ctx, {
-            type: 'line',
+            type: 'bar',
             data: {
-                labels: ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Hoy'],
-                datasets: [{
-                    label: 'Ventas CLP ($)',
-                    data: [0, 0, 0, 0, 0, 0, 0],
-                    borderColor: '#10b981',
-                    backgroundColor: 'rgba(16, 185, 129, 0.08)',
-                    borderWidth: 2,
-                    fill: true,
-                    tension: 0.4
-                }]
+                labels: ['', '', '', '', '', '', ''],
+                datasets: [
+                    {
+                        type: 'bar',
+                        label: 'Venta Total Día (CLP)',
+                        data: [0, 0, 0, 0, 0, 0, 0],
+                        backgroundColor: 'rgba(16, 185, 129, 0.35)',
+                        borderColor: '#10b981',
+                        borderWidth: 1,
+                        borderRadius: 4,
+                        yAxisID: 'y'
+                    },
+                    {
+                        type: 'line',
+                        label: 'Promedio / Máquina (CLP)',
+                        data: [0, 0, 0, 0, 0, 0, 0],
+                        borderColor: '#38bdf8',
+                        backgroundColor: 'rgba(56, 189, 248, 0.1)',
+                        borderWidth: 2,
+                        fill: false,
+                        tension: 0.3,
+                        yAxisID: 'y1'
+                    }
+                ]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
+                plugins: { legend: { display: true, labels: { color: '#9ca3af', font: { size: 10 } } } },
                 scales: {
-                    y: { grid: { color: '#1a233a' }, ticks: { color: '#9ca3af', font: { size: 9 } } },
+                    y: { type: 'linear', display: true, position: 'left', grid: { color: '#1a233a' }, ticks: { color: '#9ca3af', font: { size: 9 } } },
+                    y1: { type: 'linear', display: true, position: 'right', grid: { drawOnChartArea: false }, ticks: { color: '#38bdf8', font: { size: 9 } } },
                     x: { grid: { display: false }, ticks: { color: '#9ca3af', font: { size: 9 } } }
                 }
             }
@@ -794,7 +789,8 @@
                 totalPrizes += pDelta;
             });
 
-            updateDailyLedgerArchive(totalDaily, totalPrizes, todayStr);
+            // ⚡ MOTOR MAESTRO UNIFICADO: CONSOLIDA BITÁCORA Y GRÁFICO DUAL-AXIS DINÁMICO
+            rebuildMasterLedgerAndChart(totalDaily);
 
             // CÁLCULO DE VENTA PROMEDIO / MÁQUINA (EXCELENTE > $15k)
             let avgPerMachine = machines.length > 0 ? totalDaily / machines.length : 0;
@@ -832,12 +828,17 @@
                 avgBorderColor = "#ef4444";
             }
 
+            // 🚀 NUEVA MÉTRICA ELON: VELOCIDAD DE CAJA ESTIMADA POR HORA OPERATIVA
+            let currentHour = new Date().getHours();
+            let operationalHours = Math.max(1, currentHour - 8); // Asumiendo inicio jornada 08:00 hrs
+            let cashVelocity = Math.round(totalDaily / operationalHours);
+
             document.getElementById('daily-sales').innerText = `$${totalDaily.toLocaleString()} CLP`;
             document.getElementById('box-total').innerText = `$${totalBox.toLocaleString()} CLP`;
             document.getElementById('total-prizes').innerText = `${totalPrizes} un.`;
             document.getElementById('active-terminals').innerText = onlineCount;
+            document.getElementById('cash-velocity').innerText = `$${cashVelocity.toLocaleString()} / hr`;
             
-            // Actualizar tarjeta superior de Venta Promedio / Máquina con Excelente > $15k
             document.getElementById('avg-machine-sales').innerText = `$${Math.round(avgPerMachine).toLocaleString()} CLP`;
             let statusEl = document.getElementById('avg-machine-status');
             if(statusEl) {
@@ -852,24 +853,70 @@
             let efficiency = totalPrizes > 0 ? Math.min(100, Math.round((totalPrizes * 500 / (totalDaily || 1)) * 100)) : 0;
             document.getElementById('fleet-efficiency').innerText = `${efficiency}%`;
 
-            salesChart.data.datasets[0].data[6] = totalDaily;
-            salesChart.update();
-
             renderMachineBoxes(machines);
             renderLedger();
             renderAuditLog();
             updateFleetMapMarkers(machines);
         }
 
-        function updateDailyLedgerArchive(totalDaily, totalPrizes, todayStr) {
-            if (!dailyLedger) dailyLedger = [];
-            let existingEntry = dailyLedger.find(item => item.date === todayStr);
-            if (existingEntry) {
-                existingEntry.total = totalDaily;
-                existingEntry.prizes = totalPrizes;
-            } else {
-                dailyLedger.unshift({ date: todayStr, total: totalDaily, prizes: totalPrizes });
+        // 🧠 MOTOR UNIFICADO: PERSISTENCIA TOTAL DE DÍAS Y GRÁFICO DUAL CORRELACIONADO
+        function rebuildMasterLedgerAndChart(totalDaily) {
+            let todayStr = getChileDateStr();
+            
+            // 1. Asegurar que cada máquina tenga registrado el día actual en sus dailyLogs
+            machines.forEach(m => {
+                if (!m.dailyLogs) m.dailyLogs = {};
+                if (m.dailyLogs[todayStr] === undefined) {
+                    m.dailyLogs[todayStr] = m.sales || 0;
+                }
+            });
+
+            // 2. Consolidar mapa global por fecha de todas las máquinas
+            let dateMap = {};
+            machines.forEach(m => {
+                if (m.dailyLogs) {
+                    Object.keys(m.dailyLogs).forEach(date => {
+                        if (!dateMap[date]) dateMap[date] = { total: 0, prizes: 0 };
+                        dateMap[date].total += m.dailyLogs[date];
+                    });
+                }
+            });
+
+            // Forzar que el día de hoy refleje el total real actual de la flota
+            dateMap[todayStr] = { total: totalDaily, prizes: machines.reduce((acc, m) => acc + (m.prizes || 0), 0) };
+
+            dailyLedger = Object.keys(dateMap).map(date => ({
+                date: date,
+                total: dateMap[date].total,
+                prizes: dateMap[date].prizes || 0
+            })).sort((a, b) => b.date.localeCompare(a.date));
+
+            // 3. Alimentar Gráfico Maestro Dual con los últimos 7 días exactos
+            let chartLabels = [];
+            let chartBarData = [];
+            let chartLineData = [];
+            let activeMachinesCount = Math.max(1, machines.length);
+
+            for (let i = 6; i >= 0; i--) {
+                let d = new Date();
+                d.setDate(d.getDate() - i);
+                let year = d.getFullYear();
+                let month = String(d.getMonth() + 1).padStart(2, '0');
+                let day = String(d.getDate()).padStart(2, '0');
+                let dateStr = `${year}-${month}-${day}`;
+                
+                chartLabels.push(`${day}/${month}`);
+
+                let dayTotal = (dateMap[dateStr]) ? dateMap[dateStr].total : 0;
+                chartBarData.push(dayTotal);
+                chartLineData.push(Math.round(dayTotal / activeMachinesCount));
             }
+
+            salesChart.data.labels = chartLabels;
+            salesChart.data.datasets[0].data = chartBarData; // Barras de Venta Total
+            salesChart.data.datasets[1].data = chartLineData; // Línea de Promedio por Máquina
+            salesChart.update();
+            saveToLocalStorage();
         }
 
         function triggerGreenPulse(mac) {
