@@ -804,14 +804,16 @@
             let todayStr = getChileDateStr(); 
 
             machines.forEach(m => {
-                // ⚡ CONEXIÓN DIRECTA Y ROBUSTA: Calculamos el dinero registrado actual (cDelta * 100)
+                // 🇨🇭 UNIFICACIÓN MAESTRA DE RELOJ SUIZO:
+                // Tanto "Dinero Registrado" (Caja Física) como "Venta Día" (Telemetría Diaria) 
+                // se calculan directamente a partir del contador mecánico real de monedas (cFinal - cInit).
                 let cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
                 let telemetryPulses = Math.floor((m.sales || 0) / 100);
                 let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
                 let cDelta = Math.max(0, cFinal - cInit);
                 let dineroRegistradoActual = cDelta * 100;
 
-                // Seguimiento de estado anterior para alertas de sonido
+                // Detección de sonido de monedas en vivo por incremento en el contador físico
                 if (previousSalesState[m.mac] === undefined) {
                     previousSalesState[m.mac] = dineroRegistradoActual;
                 }
@@ -829,27 +831,26 @@
 
                 if (!m.dailyLogs) m.dailyLogs = {};
 
-                // 🇨🇭 LÍNEA BASE DIARIA DE CAJA: Al cambiar de día, fijamos el dinero registrado de arranque
+                // 🇨🇭 LÍNEA BASE DIARIA DE CAJA: Al cambiar de fecha en Chile (00:00 hrs), 
+                // guardamos el contador con el que arranca el día para medir exactamente lo vendido hoy.
                 if (!m.dailyBoxBaselineDate || m.dailyBoxBaselineDate !== todayStr) {
                     m.dailyBoxBaselineDate = todayStr;
                     m.dayStartBox = dineroRegistradoActual;
                 }
 
-                // Si por vaciar box o ajuste el dinero actual es menor que el de inicio, re-anclamos
                 if (dineroRegistradoActual < m.dayStartBox) {
                     m.dayStartBox = dineroRegistradoActual;
                 }
 
-                // La venta del día es exactamente lo que subió el dinero registrado desde el inicio del día
+                // Venta del día = Crecimiento del Dinero Registrado desde las 00:00 hrs de hoy
                 let machineTodaySales = Math.max(0, dineroRegistradoActual - m.dayStartBox);
                 m.dailyLogs[todayStr] = machineTodaySales;
 
                 totalDaily += machineTodaySales;
+                totalBox += dineroRegistradoActual;
 
                 let isOnline = m.is_online !== false;
                 if (isOnline) onlineCount++;
-
-                totalBox += dineroRegistradoActual;
 
                 let pDelta = m.prizes || 0;
                 totalPrizes += pDelta;
@@ -1352,6 +1353,8 @@
                         m.sales = 0;
                         m.box = 0;
                         m.lastSalesCount = 0;
+                        m.boxResetSales = m.sales || 0;
+                        m.dayStartBox = dineroRecaudado;
                     }
                 });
                 logAuditEvent("CIERRE DE CAJA GLOBAL", "Toda la Flota", operador, `Monto total retirado: $${totalGlobalRecaudado.toLocaleString()} CLP`);
@@ -1396,6 +1399,8 @@
             m.sales = 0;
             m.box = 0;
             m.lastSalesCount = 0;
+            m.boxResetSales = m.sales || 0;
+            m.dayStartBox = 0;
             playAlertAlarmSound(true);
             logAuditEvent("CIERRE DE CAJA INDIVIDUAL", m.name, operador, `Recaudado: $${dineroRecaudado.toLocaleString()} CLP`);
             updateUI();
@@ -1583,7 +1588,6 @@
                     <tbody>${tableRows}</tbody>
                 </table>
             `;
-            document.getElementById('print-modal').style.display = 'print'; // fixed modal display bug
             document.getElementById('print-modal').style.display = 'flex';
         }
 
