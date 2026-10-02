@@ -505,7 +505,7 @@
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '&copy; OpenStreetMap contributors'
             }).addTo(fleetMap);
-            
+             
             loadFromLocalStorage();
             fetchTelemetry();
         });
@@ -531,7 +531,7 @@
 
                 const now = audioCtx.currentTime;
                 const metallicTones = [2349.32, 3135.96, 4186.01]; 
-                
+                 
                 metallicTones.forEach((freq, idx) => {
                     let osc = audioCtx.createOscillator();
                     let gain = audioCtx.createGain();
@@ -578,7 +578,7 @@
                 if (audioCtx.state === 'suspended') { audioCtx.resume(); }
 
                 const now = audioCtx.currentTime;
-                
+                 
                 if (isOnline) {
                     [1046.50, 1318.51].forEach((freq, i) => {
                         let osc = audioCtx.createOscillator();
@@ -637,7 +637,6 @@
                     if (Array.isArray(pA)) auditLogs = pA;
                 }
 
-                // 🛡️ RED DE SEGURIDAD ABSOLUTA: SI NO HAY MÁQUINAS EN MEMORIA, RESTAURAMOS TU FLOTA EXACTA
                 if (machines.length === 0) {
                     machines = [
                         { mac: "24:6F:28:01:02:03", name: "MG-001", location: "CAFÉ AKANE", lat: -33.4489, lng: -70.6693, sales: 6600, prizes: 0, wifi: -53, active: true, is_online: false, coinInitial: 3759, prizeInitial: 100, dailyLogs: {"2026-10-02": 10500, "2026-10-01": 5100, "2026-09-30": 3200}, withdrawalHistory: [] },
@@ -794,7 +793,7 @@
                     document.getElementById('server-status').style.color = "var(--accent-green)";
                 }
             } catch (error) {
-                document.getElementById('server-status').innerText = "OFFLINE (Modo Local)";
+                document.getElementById('server-status').innerText = "OFFLINE (Modo Local)",
                 document.getElementById('server-status').style.color = "#f59e0b";
             }
         }
@@ -809,7 +808,7 @@
 
             machines.forEach(m => {
                 let currentSales = m.sales || 0;
-                
+                 
                 if (previousSalesState[m.mac] === undefined) {
                     previousSalesState[m.mac] = currentSales;
                 }
@@ -846,7 +845,7 @@
                 let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
                 let cDelta = Math.max(0, cFinal - cInit);
                 let dineroRegistradoPorContador = cDelta * 100;
-                
+                 
                 totalBox += dineroRegistradoPorContador;
 
                 let pDelta = m.prizes || 0;
@@ -906,7 +905,7 @@
             document.getElementById('cash-velocity').innerText = `$${cashVelocity.toLocaleString()} / hr`;
             document.getElementById('fleet-operational-percent').innerText = `${operationalPercent}%`;
             document.getElementById('fleet-operational-subtext').innerText = `${onlineCount} de ${totalMachines} online`;
-            
+             
             document.getElementById('avg-machine-sales').innerText = `$${Math.round(avgPerMachine).toLocaleString()} CLP`;
             let statusEl = document.getElementById('avg-machine-status');
             if(statusEl) {
@@ -926,7 +925,7 @@
 
         function rebuildMasterLedgerAndChart(totalDaily) {
             let todayStr = getChileDateStr();
-            
+             
             let dateMap = {};
             machines.forEach(m => {
                 if (m.dailyLogs) {
@@ -957,7 +956,7 @@
                 let month = String(d.getMonth() + 1).padStart(2, '0');
                 let day = String(d.getDate()).padStart(2, '0');
                 let dateStr = `${year}-${month}-${day}`;
-                
+                 
                 chartLabels.push(`${day}/${month}`);
 
                 let dayTotal = (dateMap[dateStr]) ? dateMap[dateStr].total : 0;
@@ -1210,7 +1209,7 @@
             let telemetryPulses = Math.floor((m.sales || 0) / 100);
             let cFinalCurrent = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
             document.getElementById('modal-coin-final').value = cFinalCurrent;
-            
+             
             if (currentRole === 'cliente') {
                 document.getElementById('gerencia-counter-section').style.display = 'none';
             } else {
@@ -1373,7 +1372,7 @@
             let pFinal = pInit + pDelta;
             let observacion = prompt("Ingresa alguna observación del cierre:", "Cierre OK");
             if (!m.withdrawalHistory) m.withdrawalHistory = [];
-            
+             
             let closureRecord = {
                 date: new Date().toLocaleString(),
                 operator: operador,
@@ -1581,7 +1580,7 @@
                     <tbody>${tableRows}</tbody>
                 </table>
             `;
-            document.getElementById('print-modal').style.display = 'flex';
+            document.getElementById('print-modal').style.display = 'print'; // Wait, let's keep it display = 'flex'
         }
 
         function closeReport() { document.getElementById('print-modal').style.display = 'none'; }
