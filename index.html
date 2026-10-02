@@ -835,22 +835,27 @@
 
                 if (!m.dailyLogs) m.dailyLogs = {};
 
-                // ⚡ AQUÍ ESTABA LA CLAVE: LA BASE DE HOY DEBE SER EL CONTADOR AL INICIAR EL DÍA. 
-                // SI ES UN DÍA NUEVO O LA BASE NO EXISTE, FIJAMOS LA BASE EN EL VALOR ACTUAL MENOS CUALQUIER INCREMENTO NUEVO,
-                // O DIRECTAMENTE INICIALIZAMOS CON EL CONTADOR DE INICIO DE SESIÓN.
-                if (!m.dayStartPulsesDate || m.dayStartPulsesDate !== todayStr) {
-                    m.dayStartPulsesDate = todayStr;
-                    // Al comenzar el día, el punto de partida es el número de monedas acumuladas hasta ese momento exacto
-                    m.dayStartPulses = cDelta; 
+                // ⚡ SOLUCIÓN ABSOLUTA: 
+                // Cada máquina mantiene un registro de su valor base al iniciar el día ("dayStartDinero").
+                // Si la fecha cambia o no existe, guardamos el valor actual del dinero registrado como base de inicio de hoy.
+                if (!m.dayStartDineroDate || m.dayStartDineroDate !== todayStr) {
+                    m.dayStartDineroDate = todayStr;
+                    // Al arrancar el día, tomamos el dinero registrado actual como el punto cero de hoy
+                    m.dayStartDinero = dineroRegistradoTotal;
+                    // Si ya existían ventas en dailyLogs para hoy, las respetamos, de lo contrario inicializamos en 0
+                    if (m.dailyLogs[todayStr] === undefined) {
+                        m.dailyLogs[todayStr] = 0;
+                    }
                 }
 
-                // Por seguridad: si por alguna razón la base es mayor al total actual (vaciado de caja), se reajusta
-                if (m.dayStartPulses > cDelta) {
-                    m.dayStartPulses = cDelta;
+                // Si por alguna razón el dinero registrado total es menor que la base (ej. vaciado de caja), reajustamos la base
+                if (m.dayStartDinero > dineroRegistradoTotal) {
+                    m.dayStartDinero = dineroRegistradoTotal;
                 }
 
-                // VENTA DEL DÍA = (MONEDAS TOTALES ACTUALES - MONEDAS AL INICIAR EL DÍA) x 100
-                let machineTodaySales = Math.max(0, (cDelta - m.dayStartPulses) * 100);
+                // 🚀 VENTA DEL DÍA = DINERO REGISTRADO TOTAL ACTUAL - DINERO REGISTRADO AL INICIAR EL DÍA
+                // De esta manera, todo lo que sube en VERDE se refleja instantáneamente y con la misma cantidad en TURQUESA.
+                let machineTodaySales = Math.max(0, dineroRegistradoTotal - m.dayStartDinero);
                 m.dailyLogs[todayStr] = machineTodaySales;
 
                 totalDaily += machineTodaySales;
