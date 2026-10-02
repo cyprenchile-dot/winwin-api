@@ -335,7 +335,7 @@
     <!-- BITÁCORA MAESTRA DE AUDITORÍA FORENSE -->
     <div class="audit-card gerencia-only">
         <div class="analytics-header" style="margin-bottom: 4px;">
-            <h2>🛡️ Bitácora Maestra de Auditoría Forense y Trazabilidad</h2>
+            <h2>🛡️️ Bitácora Maestra de Auditoría Forense y Trazabilidad</h2>
             <span style="font-size: 0.65rem; color: var(--accent-yellow);">Doble persistencia (Servidor + LocalStorage)</span>
         </div>
         <div class="audit-table-container">
@@ -778,6 +778,18 @@
                                 playAlertAlarmSound(currentOnline);
                             }
                             previousOnlineState[newM.mac] = currentOnline;
+
+                            // 🛡️ CORRECCIÓN CLAVE DE SINCRONIZACIÓN: FUSIONAR DATOS SERVER CON BASES LOCALES
+                            let existingM = machines.find(item => item.mac === newM.mac);
+                            if (existingM) {
+                                newM.dailyLogs = existingM.dailyLogs || {};
+                                newM.coinInitial = existingM.coinInitial !== undefined ? existingM.coinInitial : 3768;
+                                newM.prizeInitial = existingM.prizeInitial !== undefined ? existingM.prizeInitial : 1164;
+                                newM.coinManualBase = existingM.coinManualBase;
+                                newM.withdrawalHistory = existingM.withdrawalHistory || [];
+                                newM.dailyBoxBaselineDate = existingM.dailyBoxBaselineDate;
+                                newM.dayStartBox = existingM.dayStartBox;
+                            }
                         });
 
                         machines = data.machines;
@@ -804,16 +816,13 @@
             let todayStr = getChileDateStr(); 
 
             machines.forEach(m => {
-                // 🇨🇭 UNIFICACIÓN MAESTRA DE RELOJ SUIZO:
-                // Tanto "Dinero Registrado" (Caja Física) como "Venta Día" (Telemetría Diaria) 
-                // se calculan directamente a partir del contador mecánico real de monedas (cFinal - cInit).
                 let cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
                 let telemetryPulses = Math.floor((m.sales || 0) / 100);
                 let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
                 let cDelta = Math.max(0, cFinal - cInit);
                 let dineroRegistradoActual = cDelta * 100;
 
-                // Detección de sonido de monedas en vivo por incremento en el contador físico
+                // Detección de sonido de monedas en vivo por incremento en el dinero registrado
                 if (previousSalesState[m.mac] === undefined) {
                     previousSalesState[m.mac] = dineroRegistradoActual;
                 }
@@ -831,8 +840,8 @@
 
                 if (!m.dailyLogs) m.dailyLogs = {};
 
-                // 🇨🇭 LÍNEA BASE DIARIA DE CAJA: Al cambiar de fecha en Chile (00:00 hrs), 
-                // guardamos el contador con el que arranca el día para medir exactamente lo vendido hoy.
+                // 🇨🇭 LÍNEA BASE DIARIA BLINDADA: Al cambiar de fecha en Chile (00:00 hrs), 
+                // guardamos el dinero registrado de arranque para el nuevo día.
                 if (!m.dailyBoxBaselineDate || m.dailyBoxBaselineDate !== todayStr) {
                     m.dailyBoxBaselineDate = todayStr;
                     m.dayStartBox = dineroRegistradoActual;
@@ -842,7 +851,7 @@
                     m.dayStartBox = dineroRegistradoActual;
                 }
 
-                // Venta del día = Crecimiento del Dinero Registrado desde las 00:00 hrs de hoy
+                // Venta del día = Crecimiento exacto del Dinero Registrado desde las 00:00 hrs de hoy
                 let machineTodaySales = Math.max(0, dineroRegistradoActual - m.dayStartBox);
                 m.dailyLogs[todayStr] = machineTodaySales;
 
@@ -1353,8 +1362,6 @@
                         m.sales = 0;
                         m.box = 0;
                         m.lastSalesCount = 0;
-                        m.boxResetSales = m.sales || 0;
-                        m.dayStartBox = dineroRecaudado;
                     }
                 });
                 logAuditEvent("CIERRE DE CAJA GLOBAL", "Toda la Flota", operador, `Monto total retirado: $${totalGlobalRecaudado.toLocaleString()} CLP`);
@@ -1399,8 +1406,6 @@
             m.sales = 0;
             m.box = 0;
             m.lastSalesCount = 0;
-            m.boxResetSales = m.sales || 0;
-            m.dayStartBox = 0;
             playAlertAlarmSound(true);
             logAuditEvent("CIERRE DE CAJA INDIVIDUAL", m.name, operador, `Recaudado: $${dineroRecaudado.toLocaleString()} CLP`);
             updateUI();
