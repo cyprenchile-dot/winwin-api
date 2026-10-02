@@ -699,7 +699,7 @@
             if (currentRole === 'gerencia') {
                 currentRole = 'cliente';
                 document.getElementById('role-toggle-btn').innerText = "🔒 Rol: Cliente (Vista Locatario)";
-                document.getElementById('role-toggle-btn'].style.background = "var(--accent-purple)";
+                document.getElementById('role-toggle-btn').style.background = "var(--accent-purple)";
                 document.getElementById('btn-reg').style.display = 'none';
                 document.getElementById('btn-vaciar-global').style.display = 'none';
                 document.getElementById('btn-global-report').style.display = 'none';
@@ -822,34 +822,36 @@
                 }
                 previousSalesState[m.mac] = currentSales;
 
-                // 🇨🇭 LA VERDADERA LÓGICA DE RELOJ SUIZO (ESTABLE Y EXACTA)
-                // Vinculamos la venta diaria directamente al delta del contador físico de monedas (Dinero Registrado)
-                let cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
-                let telemetryPulses = Math.floor(currentSales / 100);
-                let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
-                
-                // Inicializar el baseline de monedas al comenzar el día (00:00 hrs)
-                if (!m.dailyCoinsBaselineDate || m.dailyCoinsBaselineDate !== todayStr) {
-                    m.dailyCoinsBaselineDate = todayStr;
-                    m.dayStartCoinsCount = cFinal;
-                }
-
-                // Si por alguna razón el contador final es menor que la base, reiniciamos la base
-                if (cFinal < m.dayStartCoinsCount) {
-                    m.dayStartCoinsCount = cFinal;
-                }
-
-                let coinsToday = cFinal - m.dayStartCoinsCount;
-                let machineTodaySales = coinsToday * 100;
-
                 if (!m.dailyLogs) m.dailyLogs = {};
-                m.dailyLogs[todayStr] = machineTodaySales;
+                if (m.lastSalesCount === undefined) m.lastSalesCount = currentSales;
 
+                // 🇨🇭 MOTOR INCREMENTAL DE RELOJ SUIZO PARA LA VENTA DEL DÍA
+                if (!m.lastSalesDate || m.lastSalesDate !== todayStr) {
+                    m.lastSalesDate = todayStr;
+                    m.lastSalesCount = currentSales; // Anclar al iniciar el nuevo día para que comience en 0
+                }
+
+                if (currentSales > m.lastSalesCount) {
+                    let diff = currentSales - m.lastSalesCount;
+                    m.dailyLogs[todayStr] = (m.dailyLogs[todayStr] || 0) + diff;
+                    m.lastSalesCount = currentSales;
+                } else if (currentSales < m.lastSalesCount) {
+                    m.lastSalesCount = currentSales;
+                }
+
+                if (m.dailyLogs[todayStr] === undefined) {
+                    m.dailyLogs[todayStr] = 0;
+                }
+
+                let machineTodaySales = m.dailyLogs[todayStr];
                 totalDaily += machineTodaySales;
 
                 let isOnline = m.is_online !== false;
                 if (isOnline) onlineCount++;
 
+                let cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
+                let telemetryPulses = Math.floor(currentSales / 100);
+                let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
                 let cDelta = Math.max(0, cFinal - cInit);
                 let dineroRegistradoPorContador = cDelta * 100;
                 
