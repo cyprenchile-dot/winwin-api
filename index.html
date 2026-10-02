@@ -719,36 +719,6 @@
             return html;
         }
 
-        function getWifiDetails(dBm) {
-            let val = dBm || -50;
-            if (val >= -55) return { label: 'Excelente', color: '#10b981', level: 4 };
-            if (val >= -65) return { label: 'Muy buena', color: '#34d399', level: 3 };
-            if (val >= -75) return { label: 'Buena', color: '#3b82f6', level: 2 };
-            if (val >= -85) return { label: 'Regular', color: '#f59e0b', level: 1 };
-            if (val >= -95) return { label: 'Débil', color: '#f97316', level: 0.5 };
-            return { label: 'Nula', color: '#ef4444', level: 0 };
-        }
-
-        function formatWifiVisual(dBm) {
-            let info = getWifiDetails(dBm);
-            let activeBars = info.level === 4 ? 4 : (info.level === 3 ? 3 : (info.level === 2 ? 2 : (info.level === 1 ? 1 : (info.level === 0.5 ? 1 : 0))));
-            let html = `
-                <div class="wifi-visual-container">
-                    <div class="wifi-header-row">
-                        <span style="color: ${info.color}; font-weight: 800;">${info.label}</span>
-                        <span style="font-size: 0.65rem; color: var(--text-muted);">${dBm || -50} dBm</span>
-                    </div>
-                    <div class="wifi-bars">
-                        <div class="wifi-bar" style="background: ${activeBars >= 1 ? info.color : 'rgba(255,255,255,0.15)'}; height: 4px;"></div>
-                        <div class="wifi-bar" style="background: ${activeBars >= 2 ? info.color : 'rgba(255,255,255,0.15)'}; height: 7px;"></div>
-                        <div class="wifi-bar" style="background: ${activeBars >= 3 ? info.color : 'rgba(255,255,255,0.15)'}; height: 10px;"></div>
-                        <div class="wifi-bar" style="background: ${activeBars >= 4 ? info.color : 'rgba(255,255,255,0.15)'}; height: 14px;"></div>
-                    </div>
-                </div>
-            `;
-            return html;
-        }
-
         function saveStateAndSync() {
             saveToLocalStorage();
             fetch('https://winwin-api-v2.onrender.com/api/sync-fleet', {
@@ -818,25 +788,23 @@
                 }
                 previousSalesState[m.mac] = currentSales;
 
-                if (!m.dailyLogs) m.dailyLogs = {};
-                if (m.lastSalesCount === undefined) m.lastSalesCount = currentSales;
-                
-                if (currentSales > m.lastSalesCount) {
-                    let diff = currentSales - m.lastSalesCount;
-                    m.dailyLogs[todayStr] = (m.dailyLogs[todayStr] || 0) + diff;
-                    m.lastSalesCount = currentSales;
-                } else if (currentSales < m.lastSalesCount) {
-                    m.lastSalesCount = currentSales;
+                // 🛡️ CORRECCIÓN ABSOLUTA: BASELINE DIARIO POR FECHA (INICIALIZA EN 0 AL CAMBIAR DE DÍA O RECONECTAR)
+                if (!m.dailyBaselineDate || m.dailyBaselineDate !== todayStr) {
+                    m.dailyBaselineDate = todayStr;
+                    m.dayStartSales = currentSales;
                 }
+
+                let machineTodaySales = Math.max(0, currentSales - (m.dayStartSales !== undefined ? m.dayStartSales : currentSales));
+                if (!m.dailyLogs) m.dailyLogs = {};
+                m.dailyLogs[todayStr] = machineTodaySales;
+
+                totalDaily += machineTodaySales;
 
                 let isOnline = m.is_online !== false;
                 if (isOnline) onlineCount++;
-                
-                let machineTodaySales = (m.dailyLogs && m.dailyLogs[todayStr]) ? m.dailyLogs[todayStr] : 0;
-                totalDaily += machineTodaySales;
 
                 let cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
-                let telemetryPulses = Math.floor((m.sales || 0) / 100);
+                let telemetryPulses = Math.floor(currentSales / 100);
                 let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
                 let cDelta = Math.max(0, cFinal - cInit);
                 let dineroRegistradoPorContador = cDelta * 100;
@@ -921,13 +889,6 @@
         function rebuildMasterLedgerAndChart(totalDaily) {
             let todayStr = getChileDateStr();
             
-            machines.forEach(m => {
-                if (!m.dailyLogs) m.dailyLogs = {};
-                if (m.dailyLogs[todayStr] === undefined) {
-                    m.dailyLogs[todayStr] = m.sales || 0;
-                }
-            });
-
             let dateMap = {};
             machines.forEach(m => {
                 if (m.dailyLogs) {
