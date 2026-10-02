@@ -825,7 +825,7 @@
                 }
                 previousSalesState[m.mac] = currentSales;
 
-                // 🇨🇭 MOTOR RELOJ SUIZO: VENTA DEL DÍA VINCULADA AL INCREMENTO DEL DINERO REGISTRADO
+                // 🇨🇭 MOTOR RELOJ SUIZO PERFECTO: VENTA DEL DÍA = INCREMENTO DEL DINERO REGISTRADO EN VIVO
                 if (m.coinInitial === undefined) m.coinInitial = 3768;
                 let cInit = m.coinInitial;
                 let telemetryPulses = Math.floor((m.sales || 0) / 100);
@@ -835,20 +835,19 @@
 
                 if (!m.dailyLogs) m.dailyLogs = {};
 
-                // Inicializar la base de inicio del día usando el contador físico actual si no existe o cambió la fecha
-                if (!m.dayStartPulsesDate || m.dayStartPulsesDate !== todayStr) {
-                    m.dayStartPulsesDate = todayStr;
-                    m.dayStartPulses = cDelta; // Pulsos mecánicos al arrancar el día
+                // Inicializar la base de inicio del día exactamente igual al contador físico inicial o al valor a las 00:00
+                if (!m.dayStartDineroDate || m.dayStartDineroDate !== todayStr) {
+                    m.dayStartDineroDate = todayStr;
+                    m.dayStartDinero = dineroRegistradoTotal; // El efectivo registrado al arrancar el día
                 }
 
-                // Si por alguna razón la base es mayor que el delta actual (ej. vaciado de caja), reajustamos
-                if (m.dayStartPulses > cDelta) {
-                    m.dayStartPulses = cDelta;
+                // Si por vaciado de caja o reseteo la base es mayor al total actual, se ajusta
+                if (m.dayStartDinero > dineroRegistradoTotal) {
+                    m.dayStartDinero = dineroRegistradoTotal;
                 }
 
-                let pulsesToday = cDelta - m.dayStartPulses;
-                let machineTodaySales = pulsesToday * 100;
-
+                // Venta del día es 100% idéntica al incremento del dinero registrado hoy
+                let machineTodaySales = Math.max(0, dineroRegistradoTotal - m.dayStartDinero);
                 m.dailyLogs[todayStr] = machineTodaySales;
 
                 totalDaily += machineTodaySales;
