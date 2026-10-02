@@ -505,7 +505,7 @@
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '&copy; OpenStreetMap contributors'
             }).addTo(fleetMap);
-             
+            
             loadFromLocalStorage();
             fetchTelemetry();
         });
@@ -531,7 +531,7 @@
 
                 const now = audioCtx.currentTime;
                 const metallicTones = [2349.32, 3135.96, 4186.01]; 
-                 
+                
                 metallicTones.forEach((freq, idx) => {
                     let osc = audioCtx.createOscillator();
                     let gain = audioCtx.createGain();
@@ -578,7 +578,7 @@
                 if (audioCtx.state === 'suspended') { audioCtx.resume(); }
 
                 const now = audioCtx.currentTime;
-                 
+                
                 if (isOnline) {
                     [1046.50, 1318.51].forEach((freq, i) => {
                         let osc = audioCtx.createOscillator();
@@ -639,10 +639,7 @@
 
                 if (machines.length === 0) {
                     machines = [
-                        { mac: "24:6F:28:01:02:03", name: "MG-001", location: "CAFÉ AKANE", lat: -33.4489, lng: -70.6693, sales: 6600, prizes: 0, wifi: -53, active: true, is_online: false, coinInitial: 3759, prizeInitial: 100, dailyLogs: {"2026-10-02": 10500, "2026-10-01": 5100, "2026-09-30": 3200}, withdrawalHistory: [] },
-                        { mac: "8C:8C:29:EE:87:1C", name: "MG-002", location: "Happy House", lat: -33.4500, lng: -70.6600, sales: 3000, prizes: 13, wifi: -60, active: true, is_online: false, coinInitial: 495, prizeInitial: 19, dailyLogs: {"2026-10-02": 4500}, withdrawalHistory: [] },
-                        { mac: "20:50:0D:8C:27:A8", name: "MG-005", location: "ARAMCO CHICUREO", lat: -33.3000, lng: -70.7000, sales: 2000, prizes: 0, wifi: -58, active: true, is_online: true, coinInitial: 574, prizeInitial: 16, dailyLogs: {"2026-10-02": 2500, "2026-10-01": 2000}, withdrawalHistory: [] },
-                        { mac: "20:50:0D:1A:23:B4", name: "MG-004", location: "ARAMCO CHICUREO", lat: -33.3100, lng: -70.7100, sales: 1200, prizes: 0, wifi: -62, active: true, is_online: true, coinInitial: 2594, prizeInitial: 635, dailyLogs: {"2026-10-02": 1200, "2026-10-01": 2300}, withdrawalHistory: [] }
+                        { mac: "B0:3F:D3:70:14:84", name: "Terminal 14:84", location: "Local por definir", lat: -33.4489, lng: -70.6693, sales: 0, prizes: 0, wifi: -33, active: true, is_online: true, coinInitial: 3780, prizeInitial: 1164, dailyLogs: {}, withdrawalHistory: [] }
                     ];
                     saveToLocalStorage();
                 }
@@ -702,7 +699,7 @@
             if (currentRole === 'gerencia') {
                 currentRole = 'cliente';
                 document.getElementById('role-toggle-btn').innerText = "🔒 Rol: Cliente (Vista Locatario)";
-                document.getElementById('role-toggle-btn').style.background = "var(--accent-purple)";
+                document.getElementById('role-toggle-btn'].style.background = "var(--accent-purple)";
                 document.getElementById('btn-reg').style.display = 'none';
                 document.getElementById('btn-vaciar-global').style.display = 'none';
                 document.getElementById('btn-global-report').style.display = 'none';
@@ -774,28 +771,16 @@
                 if(response.ok) {
                     const data = await response.json();
                     if(data && Array.isArray(data.machines) && data.machines.length > 0) {
-                        data.machines.forEach(serverM => {
-                            let localM = machines.find(x => x.mac === serverM.mac);
-                            if (localM) {
-                                let oldSales = localM.sales || 0;
-                                localM.sales = serverM.sales;
-                                localM.is_online = serverM.is_online;
-                                localM.wifi = serverM.wifi;
-                                if(serverM.name) localM.name = serverM.name;
-                                if(serverM.location) localM.location = serverM.location;
-
-                                if (localM.sales > oldSales) {
-                                    let diff = localM.sales - oldSales;
-                                    let todayStr = getChileDateStr();
-                                    if (!localM.dailyLogs) localM.dailyLogs = {};
-                                    localM.dailyLogs[todayStr] = (localM.dailyLogs[todayStr] || 0) + diff;
-                                    triggerGreenPulse(localM.mac);
-                                }
-                            } else {
-                                machines.push(serverM);
+                        data.machines.forEach(newM => {
+                            let oldOnline = previousOnlineState[newM.mac];
+                            let currentOnline = newM.is_online !== false;
+                            if (oldOnline !== undefined && oldOnline !== currentOnline) {
+                                playAlertAlarmSound(currentOnline);
                             }
+                            previousOnlineState[newM.mac] = currentOnline;
                         });
 
+                        machines = data.machines;
                         if(data.dailyLedger) dailyLedger = data.dailyLedger;
                         if(data.auditLogs && Array.isArray(data.auditLogs)) auditLogs = data.auditLogs;
                         saveToLocalStorage();
@@ -820,22 +805,15 @@
 
             machines.forEach(m => {
                 let currentSales = m.sales || 0;
-                 
+                
                 if (previousSalesState[m.mac] === undefined) {
                     previousSalesState[m.mac] = currentSales;
                 }
 
                 let prevSales = previousSalesState[m.mac];
 
-                if (!m.dailyLogs) m.dailyLogs = {};
-                if (m.dailyLogs[todayStr] === undefined) {
-                    m.dailyLogs[todayStr] = 0;
-                }
-
                 if (currentSales > prevSales) {
                     let diff = currentSales - prevSales;
-                    m.dailyLogs[todayStr] += diff;
-
                     let coinsCount = Math.floor(diff / 100); 
                     for (let i = 0; i < coinsCount; i++) {
                         setTimeout(() => playCoinDropSound(), i * 200); 
@@ -844,25 +822,38 @@
                 }
                 previousSalesState[m.mac] = currentSales;
 
-                // Dinero Registrado (Caja Física) basado estrictamente en contadores mecánicos
-                if (m.coinInitial === undefined) m.coinInitial = 3768;
-                let cInit = m.coinInitial;
-                let telemetryPulses = Math.floor((m.sales || 0) / 100);
+                // 🇨🇭 LA VERDADERA LÓGICA DE RELOJ SUIZO (ESTABLE Y EXACTA)
+                // Vinculamos la venta diaria directamente al delta del contador físico de monedas (Dinero Registrado)
+                let cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
+                let telemetryPulses = Math.floor(currentSales / 100);
                 let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
-                let cDelta = Math.max(0, cFinal - cInit);
-                let dineroRegistradoTotal = cDelta * 100;
+                
+                // Inicializar el baseline de monedas al comenzar el día (00:00 hrs)
+                if (!m.dailyCoinsBaselineDate || m.dailyCoinsBaselineDate !== todayStr) {
+                    m.dailyCoinsBaselineDate = todayStr;
+                    m.dayStartCoinsCount = cFinal;
+                }
 
-                // ⚡ CORRECCIÓN DIRECTA Y ABSOLUTA: 
-                // La Venta del Día (Turquesa) debe ser exactamente igual al Dinero Registrado del día en curso.
-                // Si la máquina tiene dinero registrado, se asigna directamente a la venta de hoy (salvo que ya haya tenido un cierre previo).
-                let machineTodaySales = Math.max(0, dineroRegistradoTotal - (m.lastClosedBoxTotal || 0));
+                // Si por alguna razón el contador final es menor que la base, reiniciamos la base
+                if (cFinal < m.dayStartCoinsCount) {
+                    m.dayStartCoinsCount = cFinal;
+                }
+
+                let coinsToday = cFinal - m.dayStartCoinsCount;
+                let machineTodaySales = coinsToday * 100;
+
+                if (!m.dailyLogs) m.dailyLogs = {};
                 m.dailyLogs[todayStr] = machineTodaySales;
 
                 totalDaily += machineTodaySales;
-                totalBox += dineroRegistradoTotal;
 
                 let isOnline = m.is_online !== false;
                 if (isOnline) onlineCount++;
+
+                let cDelta = Math.max(0, cFinal - cInit);
+                let dineroRegistradoPorContador = cDelta * 100;
+                
+                totalBox += dineroRegistradoPorContador;
 
                 let pDelta = m.prizes || 0;
                 totalPrizes += pDelta;
@@ -921,7 +912,7 @@
             document.getElementById('cash-velocity').innerText = `$${cashVelocity.toLocaleString()} / hr`;
             document.getElementById('fleet-operational-percent').innerText = `${operationalPercent}%`;
             document.getElementById('fleet-operational-subtext').innerText = `${onlineCount} de ${totalMachines} online`;
-             
+            
             document.getElementById('avg-machine-sales').innerText = `$${Math.round(avgPerMachine).toLocaleString()} CLP`;
             let statusEl = document.getElementById('avg-machine-status');
             if(statusEl) {
@@ -941,7 +932,7 @@
 
         function rebuildMasterLedgerAndChart(totalDaily) {
             let todayStr = getChileDateStr();
-             
+            
             let dateMap = {};
             machines.forEach(m => {
                 if (m.dailyLogs) {
@@ -972,7 +963,7 @@
                 let month = String(d.getMonth() + 1).padStart(2, '0');
                 let day = String(d.getDate()).padStart(2, '0');
                 let dateStr = `${year}-${month}-${day}`;
-                 
+                
                 chartLabels.push(`${day}/${month}`);
 
                 let dayTotal = (dateMap[dateStr]) ? dateMap[dateStr].total : 0;
@@ -1225,7 +1216,7 @@
             let telemetryPulses = Math.floor((m.sales || 0) / 100);
             let cFinalCurrent = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
             document.getElementById('modal-coin-final').value = cFinalCurrent;
-             
+            
             if (currentRole === 'cliente') {
                 document.getElementById('gerencia-counter-section').style.display = 'none';
             } else {
@@ -1365,7 +1356,6 @@
                         m.sales = 0;
                         m.box = 0;
                         m.lastSalesCount = 0;
-                        m.lastClosedBoxTotal = dineroRecaudado;
                     }
                 });
                 logAuditEvent("CIERRE DE CAJA GLOBAL", "Toda la Flota", operador, `Monto total retirado: $${totalGlobalRecaudado.toLocaleString()} CLP`);
@@ -1389,7 +1379,7 @@
             let pFinal = pInit + pDelta;
             let observacion = prompt("Ingresa alguna observación del cierre:", "Cierre OK");
             if (!m.withdrawalHistory) m.withdrawalHistory = [];
-             
+            
             let closureRecord = {
                 date: new Date().toLocaleString(),
                 operator: operador,
@@ -1410,7 +1400,6 @@
             m.sales = 0;
             m.box = 0;
             m.lastSalesCount = 0;
-            m.lastClosedBoxTotal = dineroRecaudado;
             playAlertAlarmSound(true);
             logAuditEvent("CIERRE DE CAJA INDIVIDUAL", m.name, operador, `Recaudado: $${dineroRecaudado.toLocaleString()} CLP`);
             updateUI();
