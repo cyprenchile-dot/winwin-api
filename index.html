@@ -639,7 +639,10 @@
 
                 if (machines.length === 0) {
                     machines = [
-                        { mac: "B0:3F:D3:70:14:84", name: "Terminal 14:84", location: "Local por definir", lat: -33.4489, lng: -70.6693, sales: 0, prizes: 0, wifi: -33, active: true, is_online: true, coinInitial: 3780, prizeInitial: 1164, dailyLogs: {}, withdrawalHistory: [] }
+                        { mac: "24:6F:28:01:02:03", name: "MG-001", location: "CAFÉ AKANE", lat: -33.4489, lng: -70.6693, sales: 6600, prizes: 0, wifi: -53, active: true, is_online: false, coinInitial: 3759, prizeInitial: 100, dailyLogs: {"2026-10-02": 0, "2026-10-01": 5100, "2026-09-30": 3200}, withdrawalHistory: [] },
+                        { mac: "8C:8C:29:EE:87:1C", name: "MG-002", location: "Happy House", lat: -33.4500, lng: -70.6600, sales: 3000, prizes: 13, wifi: -60, active: true, is_online: false, coinInitial: 495, prizeInitial: 19, dailyLogs: {"2026-10-02": 0}, withdrawalHistory: [] },
+                        { mac: "20:50:0D:8C:27:A8", name: "MG-005", location: "ARAMCO CHICUREO", lat: -33.3000, lng: -70.7000, sales: 2000, prizes: 0, wifi: -58, active: true, is_online: true, coinInitial: 574, prizeInitial: 16, dailyLogs: {"2026-10-02": 0, "2026-10-01": 2000}, withdrawalHistory: [] },
+                        { mac: "20:50:0D:1A:23:B4", name: "MG-004", location: "ARAMCO CHICUREO", lat: -33.3100, lng: -70.7100, sales: 1200, prizes: 0, wifi: -62, active: true, is_online: true, coinInitial: 2594, prizeInitial: 635, dailyLogs: {"2026-10-02": 0, "2026-10-01": 2300}, withdrawalHistory: [] }
                     ];
                     saveToLocalStorage();
                 }
@@ -770,6 +773,7 @@
                 const response = await fetch('https://winwin-api-v2.onrender.com/api/sync-fleet', { signal: AbortSignal.timeout(5000) });
                 if(response.ok) {
                     const data = await response.json();
+                    // 🛡️ BLINDAJE ABSOLUTO: NUNCA SOBRESCRIBIR LOCAL CON UN SERVIDOR VACÍO
                     if(data && Array.isArray(data.machines) && data.machines.length > 0) {
                         data.machines.forEach(newM => {
                             let oldOnline = previousOnlineState[newM.mac];
@@ -778,18 +782,6 @@
                                 playAlertAlarmSound(currentOnline);
                             }
                             previousOnlineState[newM.mac] = currentOnline;
-
-                            // Preservar estados locales críticos para que el servidor no sobrescriba las líneas base
-                            let existingM = machines.find(item => item.mac === newM.mac);
-                            if (existingM) {
-                                newM.dailyLogs = existingM.dailyLogs || {};
-                                newM.coinInitial = existingM.coinInitial !== undefined ? existingM.coinInitial : 3768;
-                                newM.prizeInitial = existingM.prizeInitial !== undefined ? existingM.prizeInitial : 1164;
-                                newM.coinManualBase = existingM.coinManualBase;
-                                newM.withdrawalHistory = existingM.withdrawalHistory || [];
-                                newM.dailyBoxBaselineDate = existingM.dailyBoxBaselineDate;
-                                newM.dayStartBox = existingM.dayStartBox;
-                            }
                         });
 
                         machines = data.machines;
@@ -816,52 +808,50 @@
             let todayStr = getChileDateStr(); 
 
             machines.forEach(m => {
-                let cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
-                let telemetryPulses = Math.floor((m.sales || 0) / 100);
-                let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
-                let cDelta = Math.max(0, cFinal - cInit);
-                let dineroRegistradoActual = cDelta * 100;
-
-                // Sonido y pulso en vivo por incremento en el dinero registrado
+                let currentSales = m.sales || 0;
+                
                 if (previousSalesState[m.mac] === undefined) {
-                    previousSalesState[m.mac] = dineroRegistradoActual;
+                    previousSalesState[m.mac] = currentSales;
                 }
 
-                let prevDinero = previousSalesState[m.mac];
-                if (dineroRegistradoActual > prevDinero) {
-                    let diff = dineroRegistradoActual - prevDinero;
+                let prevSales = previousSalesState[m.mac];
+
+                if (currentSales > prevSales) {
+                    let diff = currentSales - prevSales;
                     let coinsCount = Math.floor(diff / 100); 
                     for (let i = 0; i < coinsCount; i++) {
                         setTimeout(() => playCoinDropSound(), i * 200); 
                     }
                     triggerGreenPulse(m.mac);
                 }
-                previousSalesState[m.mac] = dineroRegistradoActual;
+                previousSalesState[m.mac] = currentSales;
+
+                // 🇨🇭 LÓGICA DE RELOJ SUIZO INFAIBLE: VINCULACIÓN DIRECTA DEL CONTADOR FÍSICO DE MONEDAS AL DÍA
+                let cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
+                let telemetryPulses = Math.floor(currentSales / 100);
+                let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
+                
+                // Fijar o actualizar la base de monedas del día a las 00:00 hrs de Chile
+                if (!m.dailyBaselineDate || m.dailyBaselineDate !== todayStr) {
+                    m.dailyBaselineDate = todayStr;
+                    m.dayStartCoins = cFinal;
+                }
+
+                let coinsToday = Math.max(0, cFinal - (m.dayStartCoins !== undefined ? m.dayStartCoins : cFinal));
+                let machineTodaySales = coinsToday * 100;
 
                 if (!m.dailyLogs) m.dailyLogs = {};
-
-                // 🇨🇭 EL CORAZÓN DE LA SOLUCIÓN:
-                // Si la fecha actual de Chile cambió respecto al último registro de línea base, 
-                // establecemos el nuevo punto de partida exactamente igual al dinero registrado actual.
-                // Así, todo lo que ingrese desde este segundo en adelante formará parte de la venta de HOY.
-                if (!m.dailyBoxBaselineDate || m.dailyBoxBaselineDate !== todayStr) {
-                    m.dailyBoxBaselineDate = todayStr;
-                    m.dayStartBox = dineroRegistradoActual;
-                }
-
-                if (dineroRegistradoActual < m.dayStartBox) {
-                    m.dayStartBox = dineroRegistradoActual;
-                }
-
-                // Venta del día calculada de forma matemática estricta e infalible
-                let machineTodaySales = Math.max(0, dineroRegistradoActual - m.dayStartBox);
                 m.dailyLogs[todayStr] = machineTodaySales;
 
                 totalDaily += machineTodaySales;
-                totalBox += dineroRegistradoActual;
 
                 let isOnline = m.is_online !== false;
                 if (isOnline) onlineCount++;
+
+                let cDelta = Math.max(0, cFinal - cInit);
+                let dineroRegistradoPorContador = cDelta * 100;
+                
+                totalBox += dineroRegistradoPorContador;
 
                 let pDelta = m.prizes || 0;
                 totalPrizes += pDelta;
@@ -1364,7 +1354,6 @@
                         m.sales = 0;
                         m.box = 0;
                         m.lastSalesCount = 0;
-                        m.dayStartBox = dineroRecaudado;
                     }
                 });
                 logAuditEvent("CIERRE DE CAJA GLOBAL", "Toda la Flota", operador, `Monto total retirado: $${totalGlobalRecaudado.toLocaleString()} CLP`);
@@ -1409,7 +1398,6 @@
             m.sales = 0;
             m.box = 0;
             m.lastSalesCount = 0;
-            m.dayStartBox = dineroRecaudado;
             playAlertAlarmSound(true);
             logAuditEvent("CIERRE DE CAJA INDIVIDUAL", m.name, operador, `Recaudado: $${dineroRecaudado.toLocaleString()} CLP`);
             updateUI();
