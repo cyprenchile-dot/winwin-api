@@ -804,58 +804,52 @@
             let todayStr = getChileDateStr(); 
 
             machines.forEach(m => {
-                let currentSales = m.sales || 0;
-                
+                // ⚡ CONEXIÓN DIRECTA Y ROBUSTA: Calculamos el dinero registrado actual (cDelta * 100)
+                let cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
+                let telemetryPulses = Math.floor((m.sales || 0) / 100);
+                let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
+                let cDelta = Math.max(0, cFinal - cInit);
+                let dineroRegistradoActual = cDelta * 100;
+
+                // Seguimiento de estado anterior para alertas de sonido
                 if (previousSalesState[m.mac] === undefined) {
-                    previousSalesState[m.mac] = currentSales;
+                    previousSalesState[m.mac] = dineroRegistradoActual;
                 }
 
-                let prevSales = previousSalesState[m.mac];
-
-                if (currentSales > prevSales) {
-                    let diff = currentSales - prevSales;
+                let prevDinero = previousSalesState[m.mac];
+                if (dineroRegistradoActual > prevDinero) {
+                    let diff = dineroRegistradoActual - prevDinero;
                     let coinsCount = Math.floor(diff / 100); 
                     for (let i = 0; i < coinsCount; i++) {
                         setTimeout(() => playCoinDropSound(), i * 200); 
                     }
                     triggerGreenPulse(m.mac);
                 }
-                previousSalesState[m.mac] = currentSales;
+                previousSalesState[m.mac] = dineroRegistradoActual;
 
                 if (!m.dailyLogs) m.dailyLogs = {};
-                if (m.lastSalesCount === undefined) m.lastSalesCount = currentSales;
 
-                // 🇨🇭 MOTOR INCREMENTAL DE RELOJ SUIZO PARA LA VENTA DEL DÍA
-                if (!m.lastSalesDate || m.lastSalesDate !== todayStr) {
-                    m.lastSalesDate = todayStr;
-                    m.lastSalesCount = currentSales; // Anclar al iniciar el nuevo día para que comience en 0
+                // 🇨🇭 LÍNEA BASE DIARIA DE CAJA: Al cambiar de día, fijamos el dinero registrado de arranque
+                if (!m.dailyBoxBaselineDate || m.dailyBoxBaselineDate !== todayStr) {
+                    m.dailyBoxBaselineDate = todayStr;
+                    m.dayStartBox = dineroRegistradoActual;
                 }
 
-                if (currentSales > m.lastSalesCount) {
-                    let diff = currentSales - m.lastSalesCount;
-                    m.dailyLogs[todayStr] = (m.dailyLogs[todayStr] || 0) + diff;
-                    m.lastSalesCount = currentSales;
-                } else if (currentSales < m.lastSalesCount) {
-                    m.lastSalesCount = currentSales;
+                // Si por vaciar box o ajuste el dinero actual es menor que el de inicio, re-anclamos
+                if (dineroRegistradoActual < m.dayStartBox) {
+                    m.dayStartBox = dineroRegistradoActual;
                 }
 
-                if (m.dailyLogs[todayStr] === undefined) {
-                    m.dailyLogs[todayStr] = 0;
-                }
+                // La venta del día es exactamente lo que subió el dinero registrado desde el inicio del día
+                let machineTodaySales = Math.max(0, dineroRegistradoActual - m.dayStartBox);
+                m.dailyLogs[todayStr] = machineTodaySales;
 
-                let machineTodaySales = m.dailyLogs[todayStr];
                 totalDaily += machineTodaySales;
 
                 let isOnline = m.is_online !== false;
                 if (isOnline) onlineCount++;
 
-                let cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
-                let telemetryPulses = Math.floor(currentSales / 100);
-                let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
-                let cDelta = Math.max(0, cFinal - cInit);
-                let dineroRegistradoPorContador = cDelta * 100;
-                
-                totalBox += dineroRegistradoPorContador;
+                totalBox += dineroRegistradoActual;
 
                 let pDelta = m.prizes || 0;
                 totalPrizes += pDelta;
@@ -1589,6 +1583,7 @@
                     <tbody>${tableRows}</tbody>
                 </table>
             `;
+            document.getElementById('print-modal').style.display = 'print'; // fixed modal display bug
             document.getElementById('print-modal').style.display = 'flex';
         }
 
