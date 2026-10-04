@@ -437,7 +437,7 @@
                 <div style="border-top: 1px solid #333; width: 150px; padding-top: 6px;">Firma Locatario / Cliente</div>
             </div>
             <div style="text-align: center; margin-top: 20px;">
-                <button class="btn" onclick="window.print()" style="background: #000; color: #fff; padding: 8px 16px; font-size: 0.8rem;">🖨️ Imprimir / Guardar PDF</button>
+                <button class="btn" onclick="window.print()" style="background: #000; color: #fff; padding: 8px 16px; font-size: 0.8rem;">🖨️️ Imprimir / Guardar PDF</button>
             </div>
         </div>
     </div>
@@ -639,10 +639,10 @@
 
                 if (machines.length === 0) {
                     machines = [
-                        { mac: "24:6F:28:01:02:03", name: "MG-001", location: "CAFÉ AKANE", lat: -33.4489, lng: -70.6693, sales: 6600, prizes: 0, wifi: -53, active: true, is_online: false, coinInitial: 3759, prizeInitial: 100, dailyLogs: {"2026-10-02": 0, "2026-10-01": 5100, "2026-09-30": 3200}, withdrawalHistory: [] },
-                        { mac: "8C:8C:29:EE:87:1C", name: "MG-002", location: "Happy House", lat: -33.4500, lng: -70.6600, sales: 3000, prizes: 13, wifi: -60, active: true, is_online: false, coinInitial: 495, prizeInitial: 19, dailyLogs: {"2026-10-02": 0}, withdrawalHistory: [] },
-                        { mac: "20:50:0D:8C:27:A8", name: "MG-005", location: "ARAMCO CHICUREO", lat: -33.3000, lng: -70.7000, sales: 2000, prizes: 0, wifi: -58, active: true, is_online: true, coinInitial: 574, prizeInitial: 16, dailyLogs: {"2026-10-02": 0, "2026-10-01": 2000}, withdrawalHistory: [] },
-                        { mac: "20:50:0D:1A:23:B4", name: "MG-004", location: "ARAMCO CHICUREO", lat: -33.3100, lng: -70.7100, sales: 1200, prizes: 0, wifi: -62, active: true, is_online: true, coinInitial: 2594, prizeInitial: 635, dailyLogs: {"2026-10-02": 0, "2026-10-01": 2300}, withdrawalHistory: [] }
+                        { mac: "24:6F:28:01:02:03", name: "MG-001", location: "CAFÉ AKANE", lat: -33.4489, lng: -70.6693, sales: 6600, prizes: 0, wifi: -53, active: true, is_online: false, coinInitial: 3759, prizeInitial: 100, dailyLogs: {"2026-10-04": 0, "2026-10-03": 5100, "2026-10-02": 3200}, withdrawalHistory: [] },
+                        { mac: "8C:8C:29:EE:87:1C", name: "MG-002", location: "Happy House", lat: -33.4500, lng: -70.6600, sales: 3000, prizes: 13, wifi: -60, active: true, is_online: false, coinInitial: 495, prizeInitial: 19, dailyLogs: {"2026-10-04": 0}, withdrawalHistory: [] },
+                        { mac: "20:50:0D:8C:27:A8", name: "MG-005", location: "ARAMCO CHICUREO", lat: -33.3000, lng: -70.7000, sales: 2000, prizes: 0, wifi: -58, active: true, is_online: true, coinInitial: 574, prizeInitial: 16, dailyLogs: {"2026-10-04": 0, "2026-10-03": 2000}, withdrawalHistory: [] },
+                        { mac: "20:50:0D:1A:23:B4", name: "MG-004", location: "ARAMCO CHICUREO", lat: -33.3100, lng: -70.7100, sales: 1200, prizes: 0, wifi: -62, active: true, is_online: true, coinInitial: 2594, prizeInitial: 635, dailyLogs: {"2026-10-04": 0, "2026-10-03": 2300}, withdrawalHistory: [] }
                     ];
                     saveToLocalStorage();
                 }
@@ -825,31 +825,32 @@
                 }
                 previousSalesState[m.mac] = currentSales;
 
-                // 🇨🇭 CÁLCULO INFAIBLE DE VENTA DIARIA (ANCLADO AL CIERRE DE AYER)
+                // 🇨🇭 MOTOR BLINDADO DE HISTORIAL INMUTABLE
                 let cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
                 let telemetryPulses = Math.floor(currentSales / 100);
                 let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
                 
                 if (!m.dailyCoinBaselines) m.dailyCoinBaselines = {};
+                if (!m.dailyLogs) m.dailyLogs = {};
 
-                // Si detectamos que cambió el día (o es la primera vez que se evalúa hoy), 
-                // la base de hoy debe ser el contador exacto con el que terminó la máquina (m.lastKnownFinal o cFinal)
-                if (!m.lastRecordedDate || m.lastRecordedDate !== todayStr) {
-                    let baselineValue = m.lastKnownFinal !== undefined ? m.lastKnownFinal : cFinal;
-                    m.dailyCoinBaselines[todayStr] = baselineValue;
-                    m.lastRecordedDate = todayStr;
-                } else if (m.dailyCoinBaselines[todayStr] === undefined) {
-                    m.dailyCoinBaselines[todayStr] = m.lastKnownFinal !== undefined ? m.lastKnownFinal : cFinal;
+                // Si hoy no tiene base registrada, congelamos el valor actual como inicio del día de hoy
+                if (m.dailyCoinBaselines[todayStr] === undefined) {
+                    // Si ya existía un registro previo de ayer, usamos el cFinal de ayer como base de hoy, de lo contrario cInit
+                    let previousDayStr = Object.keys(m.dailyLogs).sort().pop();
+                    if (previousDayStr && previousDayStr !== todayStr && m.lastKnownFinal !== undefined) {
+                        m.dailyCoinBaselines[todayStr] = m.lastKnownFinal;
+                    } else {
+                        m.dailyCoinBaselines[todayStr] = cInit;
+                    }
                 }
 
-                // Guardar siempre el estado actual como referencia del cierre del día
                 m.lastKnownFinal = cFinal;
 
                 let startCoins = m.dailyCoinBaselines[todayStr];
                 let coinsToday = Math.max(0, cFinal - startCoins);
                 let machineTodaySales = coinsToday * 100;
 
-                if (!m.dailyLogs) m.dailyLogs = {};
+                // Actualizar solo el día de hoy en tiempo real. Los días pasados quedan estrictamente congelados.
                 m.dailyLogs[todayStr] = machineTodaySales;
 
                 totalDaily += machineTodaySales;
