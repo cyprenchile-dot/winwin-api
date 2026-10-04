@@ -3,6 +3,7 @@ from flask_cors import CORS
 import json
 import os
 import time
+from datetime import datetime
 
 app = Flask(__name__)
 CORS(app)
@@ -41,7 +42,7 @@ def save_data(data):
 def serve_index():
     return send_from_directory('.', 'index.html')
 
-# 🇨🇭 RUTA OFICIAL PARA LOS ESP32 (Alineada con tu código de Arduino)
+# 🇨🇭 RUTA OFICIAL ESP32: Sincronización atómica de Venta Diaria y Acumulado
 @app.route('/api/telemetry', methods=['POST'])
 def receive_esp32_telemetry():
     try:
@@ -53,18 +54,28 @@ def receive_esp32_telemetry():
             wifi_rssi = int(data.get("wifi", -50))
             current_t = time.time()
             
+            # Fecha actual del servidor
+            today_str = datetime.now().strftime('%Y-%m-%d')
+            
             machine_found = False
             for m in db.get("machines", []):
                 if m.get("mac") == mac:
                     machine_found = True
-                    # Sumar las nuevas monedas incrementales que envía el ESP32 a la venta total de la máquina
+                    # 1. Acumulado total general
                     current_sales = m.get("sales", 0)
                     m["sales"] = current_sales + (new_coins * 100)
+                    
+                    # 2. Conectividad y Wi-Fi
                     m["wifi"] = wifi_rssi
                     m["last_seen"] = current_t
                     m["is_online"] = True
+                    
+                    # 3. Sumar directo a la venta de hoy (dailyLogs)
+                    if "dailyLogs" not in m or not isinstance(m["dailyLogs"], dict):
+                        m["dailyLogs"] = {}
+                    current_day_sales = m["dailyLogs"].get(today_str, 0)
+                    m["dailyLogs"][today_str] = current_day_sales + (new_coins * 100)
             
-            # Si el ESP32 reporta una MAC nueva no registrada, la añadimos automáticamente
             if not machine_found:
                 new_m = {
                     "mac": mac,
@@ -77,7 +88,7 @@ def receive_esp32_telemetry():
                     "is_online": True,
                     "last_seen": current_t,
                     "coinInitial": 3768,
-                    "dailyLogs": {},
+                    "dailyLogs": {today_str: new_coins * 100},
                     "withdrawalHistory": []
                 }
                 db["machines"].append(new_m)
@@ -119,8 +130,6 @@ def sync_fleet():
         current_time = time.time()
         for m in db.get("machines", []):
             last_seen = m.get("last_seen", 0)
-            # 🇨🇭 Validar estado en línea real: Si el ESP32 ha reportado en los últimos 15 minutos (900s), está ONLINE verde. 
-            # Si no ha reportado nunca o pasó el tiempo, se marca OFFLINE de forma verídica.
             if last_seen > 0 and (current_time - last_seen) <= 900:
                 m["is_online"] = True
             else:
