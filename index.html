@@ -707,19 +707,20 @@
             let totalPrizes = 0;
             let onlineCount = 0;
 
-            let todayStr = getChileDateStr(); // Ej: "2026-10-04"
+            let todayStr = getChileDateStr(); 
 
             machines.forEach(m => {
-                let currentSales = m.sales || 0; // Ventas acumuladas absolutas que vienen del servidor/ESP32
+                let currentSales = m.sales || 0;
                 
                 if (previousSalesState[m.mac] === undefined) {
                     previousSalesState[m.mac] = currentSales;
                 }
 
                 let prevSales = previousSalesState[m.mac];
-                if (currentSales > prevSales) {
-                    let diff = currentSales - prevSales;
-                    let coinsCount = Math.floor(diff / 100); 
+                let salesDiff = currentSales - prevSales;
+
+                if (salesDiff > 0) {
+                    let coinsCount = Math.floor(salesDiff / 100); 
                     for (let i = 0; i < coinsCount; i++) {
                         setTimeout(() => playCoinDropSound(), i * 200); 
                     }
@@ -727,52 +728,41 @@
                 }
                 previousSalesState[m.mac] = currentSales;
 
-                // 1. Contador Físico (Verde - Caja Global / Acumulado Total)
+                // 1. Contador Físico (Dinero Registrado - Caja Física)
                 let cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
                 let telemetryPulses = Math.floor(currentSales / 100);
                 let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
-                
                 let cDelta = Math.max(0, cFinal - cInit);
-                let dineroRegistrado = cDelta * 100; 
+                let dineroRegistrado = cDelta * 100;
                 totalBox += dineroRegistrado;
 
-                // 2. MOTOR INMUTABLE DE VENTA DIARIA (Turquesa - Venta del Día)
+                // 2. Venta Día (Telemetría) - Snapshot de Inicio de Día
+                if (!m.dayStartCumulative) m.dayStartCumulative = {};
                 if (!m.dailyLogs) m.dailyLogs = {};
-                if (!m.dailyBaselines) m.dailyBaselines = {};
 
-                // REGLA DE ORO DE INMUTABILIDAD HISTÓRICA:
-                // Si el día de hoy no tiene baseline guardada, fijamos el punto de partida (baseline)
-                // exactamente en el acumulado que tenía la máquina al arrancar este día.
-                if (m.dailyBaselines[todayStr] === undefined) {
-                    // Buscamos cuál fue el acumulado al final de ayer para usarlo como inicio de hoy
-                    let sortedDates = Object.keys(m.dailyLogs).filter(d => d < todayStr).sort();
-                    let yesterdayStr = sortedDates.pop();
-
-                    if (yesterdayStr && m.historicalCumulative && m.historicalCumulative[yesterdayStr] !== undefined) {
-                        m.dailyBaselines[todayStr] = m.historicalCumulative[yesterdayStr];
+                if (m.dayStartCumulative[todayStr] === undefined) {
+                    let pastDates = Object.keys(m.dayStartCumulative).filter(d => d < todayStr).sort();
+                    let lastDate = pastDates.pop();
+                    if (lastDate && m.historicalCumulative && m.historicalCumulative[lastDate] !== undefined) {
+                        m.dayStartCumulative[todayStr] = m.historicalCumulative[lastDate];
                     } else {
-                        // Si no hay historial previo, asumimos que hoy arrancó con el total actual menos lo de hoy (o cInit)
-                        // Para evitar que el día actual arranque con la vida entera, si no hay baseline, fijamos baseline = currentSales
-                        // (lo que hace que hoy nazca estrictamente en $0 CLP).
-                        m.dailyBaselines[todayStr] = currentSales;
+                        m.dayStartCumulative[todayStr] = currentSales;
                     }
                 }
 
-                // Guardamos el acumulado actual como referencia final del día
                 if (!m.historicalCumulative) m.historicalCumulative = {};
                 m.historicalCumulative[todayStr] = currentSales;
 
-                // Venta de hoy = Acumulado actual - Acumulado al iniciar hoy
-                let baselineSalesToday = m.dailyBaselines[todayStr];
-                let salesTodayCLP = Math.max(0, currentSales - baselineSalesToday);
+                let startCumulativeToday = m.dayStartCumulative[todayStr];
+                if (currentSales < startCumulativeToday) {
+                    m.dayStartCumulative[todayStr] = currentSales;
+                    startCumulativeToday = currentSales;
+                }
 
-                // Asignamos la venta de hoy al registro diario actual
-                m.dailyLogs[todayStr] = salesTodayCLP;
+                let machineTodaySales = Math.max(0, currentSales - startCumulativeToday);
+                m.dailyLogs[todayStr] = machineTodaySales;
 
-                // PROTECCIÓN DE DÍAS PASADOS: Los días anteriores (d < todayStr) NUNCA se recalculan dinámicamente.
-                // Si ya tienen un valor en m.dailyLogs, se respeta y se queda congelado para siempre.
-                
-                totalDaily += salesTodayCLP;
+                totalDaily += machineTodaySales;
 
                 let isOnline = m.is_online !== false;
                 if (isOnline) onlineCount++;
@@ -807,7 +797,7 @@
                 avgStatusColor = "#f59e0b";
                 avgBorderColor = "#f59e0b";
             } else if (avgPerMachine >= 4000) {
-                avgStatusText = "📉 BAJO ($4k - $6.9k)";
+                avgStatusText, avgStatusColor = "📉 BAJO ($4k - $6.9k)";
                 avgStatusColor = "#f97316";
                 avgBorderColor = "#f97316";
             } else {
@@ -1502,7 +1492,7 @@
                 <p style="color:#000;"><b>Recaudación Total Flota:</b> $${totalRecaudado.toLocaleString()} CLP</p>
                 <table class="letter-table" style="margin-top:10px;">
                     <thead><tr><th>Máquina</th><th>Recaudación</th><th>Estado</th></tr></thead>
-                    <tbody>${tableRows}</tbody>
+                    <body>${tableRows}</tbody>
                 </table>
             `;
             document.getElementById('print-modal').style.display = 'flex';
