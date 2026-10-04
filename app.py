@@ -21,27 +21,24 @@ def load_data():
             with open(DATABASE_FILE, 'r') as f:
                 data = json.load(f)
                 if isinstance(data, dict):
-                    # Si el archivo tiene datos válidos, los devolvemos
                     if len(data.get("machines", [])) > 0:
                         return data
                     return data
         except Exception as e:
             print(f"⚠️ Error leyendo JSON persistente: {e}")
     
-    # Si el archivo no existe por primera vez, creamos el default
     if not os.path.exists(DATABASE_FILE):
         save_data(DEFAULT_DATABASE)
     return DEFAULT_DATABASE
 
 def save_data(data):
     try:
-        # PROTECCIÓN ABSOLUTA: Nunca guardar un archivo completamente vacío si ya existían máquinas
         if os.path.exists(DATABASE_FILE):
             with open(DATABASE_FILE, 'r') as f:
                 existing_data = json.load(f)
                 if len(existing_data.get("machines", [])) > 0 and len(data.get("machines", [])) == 0:
                     print("🚨 ALTA SEGURIDAD: Se bloqueó un intento de sobrescribir el disco con una flota vacía.")
-                    return # Rechaza la escritura destructiva
+                    return 
 
         os.makedirs(os.path.dirname(DATABASE_FILE), exist_ok=True)
         with open(DATABASE_FILE, 'w') as f:
@@ -60,11 +57,45 @@ def sync_fleet():
             data = request.get_json(force=True)
             if data and isinstance(data, dict):
                 db = load_data()
-                incoming_machines = data.get("machines", [])
                 
-                # ESCUDO ANTI-BORRADO ABSOLUTO EN SERVIDOR
+                # 🇨🇭 MOTOR HÍBRIDO INTELIGENTE: Si el ESP32 reporta de forma individual con su MAC
+                if "mac" in data:
+                    mac = data.get("mac")
+                    machine_found = False
+                    for m in db.get("machines", []):
+                        if m.get("mac") == mac:
+                            machine_found = True
+                            if "sales" in data: m["sales"] = data["sales"]
+                            if "wifi" in data: m["wifi"] = data["wifi"]
+                            if "prizes" in data: m["prizes"] = data["prizes"]
+                            # ESTAMPAR HORA EXACTA DE LATIDO DE VIDA
+                            m["last_seen"] = time.time()
+                            m["is_online"] = True
+                    
+                    # Si el ESP32 reporta y la máquina no estaba en la lista, la registramos automáticamente
+                    if not machine_found:
+                        new_m = {
+                            "mac": mac,
+                            "name": data.get("name", f"Terminal {mac[-5:]}"),
+                            "location": data.get("location", "Local Terreno"),
+                            "sales": data.get("sales", 0),
+                            "wifi": data.get("wifi", -50),
+                            "prizes": data.get("prizes", 0),
+                            "active": True,
+                            "is_online": True,
+                            "last_seen": time.time(),
+                            "coinInitial": 3768,
+                            "dailyLogs": {}
+                        }
+                        db["machines"].append(new_m)
+                    
+                    save_data(db)
+                    return jsonify({"status": "success", "source": "esp32_direct"}), 200
+
+                # Sincronización normal desde la interfaz web
+                incoming_machines = data.get("machines", [])
                 if len(incoming_machines) == 0 and len(db.get("machines", [])) > 0:
-                    return jsonify({"status": "protected", "message": "Acción bloqueada: Intento de sobrescribir flota con array vacío"}), 200
+                    return jsonify({"status": "protected", "message": "Acción bloqueada: Intento de array vacío"}), 200
 
                 db["machines"] = incoming_machines
                 if "dailyLedger" in data and len(data["dailyLedger"]) > 0:
@@ -73,7 +104,7 @@ def sync_fleet():
                     db["auditLogs"] = data["auditLogs"]
                 
                 save_data(db)
-                return jsonify({"status": "success"}), 200
+                return jsonify({"status": "success", "source": "web_sync"}), 200
         except Exception as e:
             return jsonify({"error": str(e)}), 400
         return jsonify({"error": "Datos inválidos"}), 400
@@ -82,7 +113,7 @@ def sync_fleet():
         current_time = time.time()
         for m in db.get("machines", []):
             last_seen = m.get("last_seen", 0)
-            # 🛡️ Margen ampliado a 900 segundos (15 minutos) para evitar falsos "OFFLINE"
+            # Margen estricto de 15 minutos (900 segundos) respaldado por el nuevo last_seen del ESP32
             if last_seen > 0 and (current_time - last_seen) <= 900:
                 m["is_online"] = True
             else:
