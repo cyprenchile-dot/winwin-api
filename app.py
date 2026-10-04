@@ -115,8 +115,21 @@ def sync_fleet():
                     for incoming in incoming_machines:
                         for existing in db.get("machines", []):
                             if existing.get("mac") == incoming.get("mac"):
+                                # Preservar last_seen del servidor
                                 if "last_seen" in existing:
                                     incoming["last_seen"] = existing["last_seen"]
+                                
+                                # Fusion inteligente de ventas para proteger datos del ESP32
+                                if existing.get("sales", 0) > incoming.get("sales", 0):
+                                    incoming["sales"] = existing["sales"]
+                                
+                                existing_logs = existing.get("dailyLogs", {})
+                                incoming_logs = incoming.get("dailyLogs", {})
+                                for d_key, d_val in existing_logs.items():
+                                    if d_key not in incoming_logs or incoming_logs[d_key] < d_val:
+                                        incoming_logs[d_key] = d_val
+                                incoming["dailyLogs"] = incoming_logs
+
                     db["machines"] = incoming_machines
 
                 if "dailyLedger" in data and len(data["dailyLedger"]) > 0:
@@ -134,7 +147,8 @@ def sync_fleet():
         current_time = time.time()
         for m in db.get("machines", []):
             last_seen = m.get("last_seen", 0)
-            if last_seen > 0 and (current_time - last_seen) <= 900:
+            # Detección rápida de desconexión (45 segundos)
+            if last_seen > 0 and (current_time - last_seen) <= 45:
                 m["is_online"] = True
             else:
                 m["is_online"] = False
