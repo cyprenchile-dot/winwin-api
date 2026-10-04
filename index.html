@@ -825,25 +825,28 @@
                 }
                 previousSalesState[m.mac] = currentSales;
 
-                // 🇨🇭 CORRECCIÓN INFALIBLE DE RELOJ SUIZO (Venta Día = Dinero Registrado del Día Actual)
+                // 🇨🇭 CÁLCULO INFAIBLE DE VENTA DIARIA (ANCLADO AL CIERRE DE AYER)
                 let cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
                 let telemetryPulses = Math.floor(currentSales / 100);
                 let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
                 
-                // Si el día cambió, guardamos el contador final de ayer como la base de inicio de hoy
+                if (!m.dailyCoinBaselines) m.dailyCoinBaselines = {};
+
+                // Si detectamos que cambió el día (o es la primera vez que se evalúa hoy), 
+                // la base de hoy debe ser el contador exacto con el que terminó la máquina (m.lastKnownFinal o cFinal)
                 if (!m.lastRecordedDate || m.lastRecordedDate !== todayStr) {
-                    // Al arrancar un nuevo día, el punto de partida es el contador que traía la máquina
-                    m.dayStartCoins = m.lastKnownFinal !== undefined ? m.lastKnownFinal : cInit;
+                    let baselineValue = m.lastKnownFinal !== undefined ? m.lastKnownFinal : cFinal;
+                    m.dailyCoinBaselines[todayStr] = baselineValue;
                     m.lastRecordedDate = todayStr;
-                } else if (m.dayStartCoins === undefined) {
-                    m.dayStartCoins = cInit;
+                } else if (m.dailyCoinBaselines[todayStr] === undefined) {
+                    m.dailyCoinBaselines[todayStr] = m.lastKnownFinal !== undefined ? m.lastKnownFinal : cFinal;
                 }
 
-                // Guardar siempre el estado actual del contador final
+                // Guardar siempre el estado actual como referencia del cierre del día
                 m.lastKnownFinal = cFinal;
 
-                // Venta de hoy es exactamente el delta de monedas acumuladas desde las 00:00 hrs de hoy
-                let coinsToday = Math.max(0, cFinal - m.dayStartCoins);
+                let startCoins = m.dailyCoinBaselines[todayStr];
+                let coinsToday = Math.max(0, cFinal - startCoins);
                 let machineTodaySales = coinsToday * 100;
 
                 if (!m.dailyLogs) m.dailyLogs = {};
