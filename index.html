@@ -242,7 +242,7 @@
 
     <div class="audit-card gerencia-only">
         <div class="analytics-header" style="margin-bottom: 4px;">
-            <h2>🛡️ Bitácora Maestra de Auditoría Forense y Trazabilidad</h2>
+            <h2>🛡️️ Bitácora Maestra de Auditoría Forense y Trazabilidad</h2>
             <span style="font-size: 0.65rem; color: var(--accent-yellow);">Doble persistencia (Servidor + LocalStorage)</span>
         </div>
         <div class="audit-table-container">
@@ -704,17 +704,15 @@
         }
 
         function resetDailySalesManual() {
-            if (confirm("¿Estás seguro de establecer el punto de partida de hoy en $0 CLP para todas las máquinas?")) {
+            if (confirm("¿Estás seguro de reiniciar las ventas de hoy a $0 CLP para todas las máquinas?")) {
                 let todayStr = getChileDateStr();
                 machines.forEach(m => {
-                    if (!m.dayStartSales) m.dayStartSales = {};
-                    m.dayStartSales[todayStr] = m.sales || 0;
                     if (!m.dailyLogs) m.dailyLogs = {};
                     m.dailyLogs[todayStr] = 0;
                 });
                 saveStateAndSync();
                 updateUI();
-                alert("✅ Corte diario realizado. Las ventas de hoy inician en $0 CLP.");
+                alert("✅ Ventas de hoy restablecidas a $0 CLP con éxito.");
             }
         }
 
@@ -754,34 +752,21 @@
                 let dineroRegistrado = cDelta * 100;
                 totalBox += dineroRegistrado;
 
-                // 2. Venta Día (Telemetría) - ARQUITECTURA DE LÍNEA BASE (BASELINE) FIJA
-                if (!m.dayStartSales || typeof m.dayStartSales !== 'object') {
-                    m.dayStartSales = {};
-                }
-
-                // Si hoy no tiene baseline registrada, fijamos el punto de partida exactamente en el acumulado actual (o 0 si es un día nuevo limpio)
-                if (m.dayStartSales[todayStr] === undefined || isNaN(m.dayStartSales[todayStr])) {
-                    // Verificamos si hay un cierre o día anterior para congelar el pasado, 
-                    // para hoy empezamos restando el acumulado actual para que nazca en $0 CLP.
-                    m.dayStartSales[todayStr] = currentSales;
-                }
-
-                let baselineToday = m.dayStartSales[todayStr];
-
-                // Si el acumulado es menor que la baseline (por un reseteo de caja), actualizamos la baseline
-                if (currentSales < baselineToday) {
-                    baselineToday = currentSales;
-                    m.dayStartSales[todayStr] = baselineToday;
-                }
-
-                // Venta de hoy = Acumulado total actual - Base de inicio de hoy
-                let machineTodaySales = Math.max(0, currentSales - baselineToday);
-
-                if (!m.dailyLogs || typeof m.dailyLogs !== 'object') {
+                // 2. Venta Día (Telemetría) - LECTURA DIRECTA PURA Y ROBUSTA DEL SERVIDOR
+                if (!m.dailyLogs || typeof m.dailyLogs !== 'object' || Array.isArray(m.dailyLogs)) {
                     m.dailyLogs = {};
                 }
-                m.dailyLogs[todayStr] = machineTodaySales;
 
+                if (m.dailyLogs[todayStr] === undefined || isNaN(m.dailyLogs[todayStr])) {
+                    m.dailyLogs[todayStr] = 0;
+                }
+
+                // Si el servidor o la telemetría local detectan un incremento de ventas, lo acumulamos de forma limpia al día de hoy
+                if (salesDiff > 0) {
+                    m.dailyLogs[todayStr] += salesDiff;
+                }
+
+                let machineTodaySales = m.dailyLogs[todayStr];
                 totalDaily += machineTodaySales;
 
                 let isOnline = m.is_online !== false;
