@@ -437,7 +437,7 @@
                 <div style="border-top: 1px solid #333; width: 150px; padding-top: 6px;">Firma Locatario / Cliente</div>
             </div>
             <div style="text-align: center; margin-top: 20px;">
-                <button class="btn" onclick="window.print()" style="background: #000; color: #fff; padding: 8px 16px; font-size: 0.8rem;">🖨️️ Imprimir / Guardar PDF</button>
+                <button class="btn" onclick="window.print()" style="background: #000; color: #fff; padding: 8px 16px; font-size: 0.8rem;">🖨️ Imprimir / Guardar PDF</button>
             </div>
         </div>
     </div>
@@ -702,7 +702,7 @@
             if (currentRole === 'gerencia') {
                 currentRole = 'cliente';
                 document.getElementById('role-toggle-btn').innerText = "🔒 Rol: Cliente (Vista Locatario)";
-                document.getElementById('role-toggle-btn').style.background = "var(--accent-purple)";
+                document.getElementById('role-toggle-btn'].style.background = "var(--accent-purple)";
                 document.getElementById('btn-reg').style.display = 'none';
                 document.getElementById('btn-vaciar-global').style.display = 'none';
                 document.getElementById('btn-global-report').style.display = 'none';
@@ -710,7 +710,7 @@
             } else {
                 currentRole = 'gerencia';
                 document.getElementById('role-toggle-btn').innerText = "👤 Rol: Gerencia (Admin)";
-                document.getElementById('role-toggle-btn').style.background = "var(--accent-blue)";
+                document.getElementById('role-toggle-btn'].style.background = "var(--accent-blue)";
                 document.getElementById('btn-reg').style.display = 'inline-block';
                 document.getElementById('btn-vaciar-global').style.display = 'inline-block';
                 document.getElementById('btn-global-report').style.display = 'inline-block';
@@ -807,14 +807,18 @@
             let todayStr = getChileDateStr(); 
 
             machines.forEach(m => {
+                // 🛑 MOTOR NIVEL DIOS: CÁLCULO ABSOLUTO BASADO EN CONTADOR MECÁNICO DE MONEDAS
+                // El contador absoluto real de monedas es: cFinal = coinInitial + (sales / 100)
+                let cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
                 let currentSales = m.sales || 0;
-                
+                let telemetryPulses = Math.floor(currentSales / 100);
+                let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
+
+                // Sonido y pulso de moneda nueva en tiempo real
                 if (previousSalesState[m.mac] === undefined) {
                     previousSalesState[m.mac] = currentSales;
                 }
-
                 let prevSales = previousSalesState[m.mac];
-
                 if (currentSales > prevSales) {
                     let diff = currentSales - prevSales;
                     let coinsCount = Math.floor(diff / 100); 
@@ -825,32 +829,40 @@
                 }
                 previousSalesState[m.mac] = currentSales;
 
-                // 🇨🇭 MOTOR BLINDADO DE HISTORIAL INMUTABLE
-                let cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
-                let telemetryPulses = Math.floor(currentSales / 100);
-                let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
-                
-                if (!m.dailyCoinBaselines) m.dailyCoinBaselines = {};
+                // 🇨🇭 LÓGICA DE DÍA ABSOLUTA Y ESTRICTA:
+                // Cada máquina guarda sus cierres diarios en m.dailyLogs[date] como MONEDAS (o CLP).
                 if (!m.dailyLogs) m.dailyLogs = {};
 
-                // Si hoy no tiene base registrada, congelamos el valor actual como inicio del día de hoy
+                // Si hoy (todayStr) no tiene un registro base de inicio de día (cStartToday), 
+                // el punto de partida para hoy es exactamente el contador final de ayer (o cInit si es el primer día).
+                if (!m.dailyCoinBaselines) m.dailyCoinBaselines = {};
+
                 if (m.dailyCoinBaselines[todayStr] === undefined) {
-                    // Si ya existía un registro previo de ayer, usamos el cFinal de ayer como base de hoy, de lo contrario cInit
-                    let previousDayStr = Object.keys(m.dailyLogs).sort().pop();
-                    if (previousDayStr && previousDayStr !== todayStr && m.lastKnownFinal !== undefined) {
+                    // Buscar cuál fue el cFinal del día anterior registrado en dailyLogs o usar cInit
+                    let sortedDates = Object.keys(m.dailyLogs).sort();
+                    let yesterdayStr = sortedDates.reverse().find(d => d < todayStr);
+                    
+                    if (yesterdayStr && m.historicalFinals && m.historicalFinals[yesterdayStr] !== undefined) {
+                        m.dailyCoinBaselines[todayStr] = m.historicalFinals[yesterdayStr];
+                    } else if (m.lastKnownFinal !== undefined && m.lastActiveDate && m.lastActiveDate !== todayStr) {
                         m.dailyCoinBaselines[todayStr] = m.lastKnownFinal;
                     } else {
+                        // Si no hay registro previo, estimamos restando lo vendido hoy o usando cInit
                         m.dailyCoinBaselines[todayStr] = cInit;
                     }
                 }
 
+                // Guardar el estado actual como referencia del día
+                if (!m.historicalFinals) m.historicalFinals = {};
+                m.historicalFinals[todayStr] = cFinal;
                 m.lastKnownFinal = cFinal;
+                m.lastActiveDate = todayStr;
 
-                let startCoins = m.dailyCoinBaselines[todayStr];
-                let coinsToday = Math.max(0, cFinal - startCoins);
+                let startCoinsToday = m.dailyCoinBaselines[todayStr];
+                let coinsToday = Math.max(0, cFinal - startCoinsToday);
                 let machineTodaySales = coinsToday * 100;
 
-                // Actualizar solo el día de hoy en tiempo real. Los días pasados quedan estrictamente congelados.
+                // CONGELAR EL DÍA EN CURSO EN EL LOG
                 m.dailyLogs[todayStr] = machineTodaySales;
 
                 totalDaily += machineTodaySales;
@@ -860,7 +872,6 @@
 
                 let cDelta = Math.max(0, cFinal - cInit);
                 let dineroRegistradoPorContador = cDelta * 100;
-                
                 totalBox += dineroRegistradoPorContador;
 
                 let pDelta = m.prizes || 0;
