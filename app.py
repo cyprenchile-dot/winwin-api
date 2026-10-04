@@ -7,7 +7,6 @@ import time
 app = Flask(__name__)
 CORS(app)
 
-# 🛑 RUTA CRÍTICA BLINDADA: Apunta obligatoriamente al disco persistente en Render
 DATABASE_FILE = '/var/data/fleet_database.json'
 
 DEFAULT_DATABASE = {
@@ -22,20 +21,29 @@ def load_data():
             with open(DATABASE_FILE, 'r') as f:
                 data = json.load(f)
                 if isinstance(data, dict):
-                    if "machines" not in data: data["machines"] = []
-                    if "dailyLedger" not in data: data["dailyLedger"] = []
-                    if "auditLogs" not in data: data["auditLogs"] = []
+                    # Si el archivo tiene datos válidos, los devolvemos
+                    if len(data.get("machines", [])) > 0:
+                        return data
+                    # Si el archivo existe pero está vacío, revisamos si hay respaldo previo en memoria
                     return data
         except Exception as e:
             print(f"⚠️ Error leyendo JSON persistente: {e}")
     
-    # Si el archivo no existe o falla, inicializa la estructura segura en el disco persistente
-    save_data(DEFAULT_DATABASE)
+    # Si el archivo no existe por primera vez, creamos el default
+    if not os.path.exists(DATABASE_FILE):
+        save_data(DEFAULT_DATABASE)
     return DEFAULT_DATABASE
 
 def save_data(data):
     try:
-        # Asegura que el directorio /var/data/ exista antes de grabar
+        # PROTECCIÓN ABSOLUTA: Nunca guardar un archivo completamente vacío si ya existían máquinas
+        if os.path.exists(DATABASE_FILE):
+            with open(DATABASE_FILE, 'r') as f:
+                existing_data = json.load(f)
+                if len(existing_data.get("machines", [])) > 0 and len(data.get("machines", [])) == 0:
+                    print("🚨 ALTA SEGURIDAD: Se bloqueó un intento de sobrescribir el disco con una flota vacía.")
+                    return # Rechaza la escritura destructiva
+
         os.makedirs(os.path.dirname(DATABASE_FILE), exist_ok=True)
         with open(DATABASE_FILE, 'w') as f:
             json.dump(data, f, indent=4)
@@ -44,76 +52,7 @@ def save_data(data):
 
 @app.route('/')
 def serve_index():
-    # Sirve correctamente tu archivo visual principal index.html
     return send_from_directory('.', 'index.html')
-
-@app.route('/api/telemetry', methods=['POST'])
-def receive_telemetry():
-    try:
-        data = request.get_json(force=True)
-    except Exception as e:
-        return jsonify({"error": "JSON inválido"}), 400
-
-    if not data:
-        return jsonify({"error": "JSON vacío"}), 400
-
-    dev_id = data.get('device_id') or data.get('mac')
-    if not dev_id:
-        return jsonify({"error": "Falta identificador"}), 400
-
-    try:
-        coins_received = int(data.get('coins') or data.get('pulse') or 0)
-    except:
-        coins_received = 0
-
-    try:
-        wifi_signal = int(data.get('wifi', -60))
-    except:
-        wifi_signal = -60
-
-    prize_status = str(data.get('prize', ''))
-
-    db = load_data()
-    
-    machine = None
-    for m in db["machines"]:
-        if m.get("mac") == dev_id or m.get("device_id") == dev_id:
-            machine = m
-            break
-
-    # Auto-registro seguro para placas nuevas al encender
-    if not machine:
-        machine = {
-            "mac": dev_id,
-            "device_id": dev_id,
-            "name": f"Terminal {dev_id[-5:] if len(dev_id)>=5 else 'Nuevo'}",
-            "location": "Local por definir",
-            "lat": -33.4489,
-            "lng": -70.6693,
-            "active": True,
-            "box": 0,
-            "sales": 0,
-            "prizes": 0,
-            "wifi": wifi_signal,
-            "last_seen": time.time(),
-            "dailyLogs": {},
-            "withdrawalHistory": []
-        }
-        db["machines"].append(machine)
-
-    if coins_received > 0:
-        monto_clp = coins_received * 100
-        machine["box"] = machine.get("box", 0) + monto_clp
-        machine["sales"] = machine.get("sales", 0) + monto_clp
-
-    if prize_status == "dispense":
-        machine["prizes"] = machine.get("prizes", 0) + 1
-
-    machine["wifi"] = wifi_signal
-    machine["last_seen"] = time.time()
-
-    save_data(db)
-    return jsonify({"status": "success", "box": machine["box"], "sales": machine["sales"]}), 200
 
 @app.route('/api/sync-fleet', methods=['GET', 'POST'])
 def sync_fleet():
@@ -124,14 +63,14 @@ def sync_fleet():
                 db = load_data()
                 incoming_machines = data.get("machines", [])
                 
-                # 🛡️ ESCUDO ANTI-BORRADO ABSOLUTO EN SERVIDOR
+                # ESCUDO ANTI-BORRADO ABSOLUTO EN SERVIDOR
                 if len(incoming_machines) == 0 and len(db.get("machines", [])) > 0:
                     return jsonify({"status": "protected", "message": "Acción bloqueada: Intento de sobrescribir flota con array vacío"}), 200
 
                 db["machines"] = incoming_machines
-                if "dailyLedger" in data:
+                if "dailyLedger" in data and len(data["dailyLedger"]) > 0:
                     db["dailyLedger"] = data["dailyLedger"]
-                if "auditLogs" in data:
+                if "auditLogs" in data and len(data["auditLogs"]) > 0:
                     db["auditLogs"] = data["auditLogs"]
                 
                 save_data(db)
@@ -142,15 +81,12 @@ def sync_fleet():
     else:
         db = load_data()
         current_time = time.time()
-        
-        # Evaluación estricta de conexión en tiempo real (35 segundos de margen)
         for m in db.get("machines", []):
             last_seen = m.get("last_seen", 0)
             if last_seen > 0 and (current_time - last_seen) <= 35:
                 m["is_online"] = True
             else:
                 m["is_online"] = False
-
         return jsonify(db), 200
 
 @app.route('/api/status', methods=['GET'])
