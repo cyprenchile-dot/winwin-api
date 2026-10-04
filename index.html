@@ -1487,10 +1487,8 @@
 
         function printSpecificClosureFromTable(machineIndex, closureIndex) {
             let m = machines[machineIndex];
-            if (m && m.withdrawalHistory && m.withdrawalHistory[closureIndex]) {
-                let targetClosure = m.withdrawalHistory[closureIndex];
-                renderReportModalContent(m, targetClosure);
-            }
+            let targetClosure = m.withdrawalHistory[closureIndex];
+            renderReportModalContent(m, targetClosure);
         }
 
         function openGlobalReport() {
