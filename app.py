@@ -74,7 +74,7 @@ def receive_esp32_telemetry():
                     m["last_seen"] = current_t
                     m["is_online"] = True
                     
-                    # 3. ACTUALIZACIÓN CLAVE: Sumar estrictamente al registro del día actual
+                    # 3. Sumar estrictamente al registro del día actual
                     if "dailyLogs" not in m or not isinstance(m["dailyLogs"], dict):
                         m["dailyLogs"] = {}
                     current_day_sales = m["dailyLogs"].get(today_str, 0)
@@ -118,18 +118,8 @@ def sync_fleet():
                                 # Preservar last_seen del servidor
                                 if "last_seen" in existing:
                                     incoming["last_seen"] = existing["last_seen"]
-                                
-                                # Fusion inteligente de ventas para proteger datos del ESP32
-                                if existing.get("sales", 0) > incoming.get("sales", 0):
-                                    incoming["sales"] = existing["sales"]
-                                
-                                existing_logs = existing.get("dailyLogs", {})
-                                incoming_logs = incoming.get("dailyLogs", {})
-                                for d_key, d_val in existing_logs.items():
-                                    if d_key not in incoming_logs or incoming_logs[d_key] < d_val:
-                                        incoming_logs[d_key] = d_val
-                                incoming["dailyLogs"] = incoming_logs
-
+                    
+                    # 🇨🇭 Aceptamos directamente los datos limpios de la web (permitiendo reseteos a $0)
                     db["machines"] = incoming_machines
 
                 if "dailyLedger" in data and len(data["dailyLedger"]) > 0:
