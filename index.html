@@ -737,24 +737,26 @@
                 let dineroRegistrado = cDelta * 100;
                 totalBox += dineroRegistrado;
 
-                // 2. Venta Día (Telemetría) - SINCRONIZACIÓN ATÓMICA DIRECTA CON EL DINERO REGISTRADO
+                // 2. Venta Día (Telemetría) - Sincronización Directa por Delta con el Dinero Registrado
                 if (!m.dailyLogs || typeof m.dailyLogs !== 'object' || Array.isArray(m.dailyLogs)) {
                     m.dailyLogs = {};
                 }
 
-                // Si hay un delta nuevo de ventas, lo sumamos al día actual
+                // Asegurar que exista la clave de hoy
+                if (m.dailyLogs[todayStr] === undefined || isNaN(m.dailyLogs[todayStr])) {
+                    m.dailyLogs[todayStr] = 0;
+                }
+
+                // 🇨🇭 ARQUITECTURA SUIZA: Si hubo aumento en el acumulado general, sumarlo a hoy
                 if (salesDiff > 0) {
-                    if (m.dailyLogs[todayStr] === undefined || isNaN(m.dailyLogs[todayStr])) {
-                        m.dailyLogs[todayStr] = 0;
-                    }
                     m.dailyLogs[todayStr] += salesDiff;
                 }
 
-                // Blindaje infalible: Si la venta diaria de hoy está en 0 pero hay dinero registrado, 
-                // sincronizamos la venta diaria directamente con el dinero registrado actual (dineroRegistrado o currentSales).
+                // Blindaje adicional: Si la venta diaria está en 0 pero el dinero registrado actual es mayor que cero (ej. al recargar),
+                // igualamos la venta diaria al dinero registrado o al acumulado actual para que nunca aparezca en $0 CLP.
                 let machineTodaySales = m.dailyLogs[todayStr];
-                if (machineTodaySales === undefined || isNaN(machineTodaySales) || machineTodaySales === 0) {
-                    machineTodaySales = currentSales > 0 ? currentSales : dineroRegistrado;
+                if (machineTodaySales === 0 && dineroRegistrado > 0) {
+                    machineTodaySales = dineroRegistrado;
                     m.dailyLogs[todayStr] = machineTodaySales;
                 }
 
