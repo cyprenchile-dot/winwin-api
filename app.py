@@ -50,7 +50,7 @@ def sync_fleet():
                 db = load_data()
                 current_t = time.time()
                 
-                # 1. Reporte directo desde el ESP32 en terreno
+                # 1. Reporte directo por pulso desde el ESP32
                 if "mac" in data and "machines" not in data:
                     mac = data.get("mac")
                     machine_found = False
@@ -85,13 +85,6 @@ def sync_fleet():
                 # 2. Sincronización desde la interfaz web
                 incoming_machines = data.get("machines", [])
                 if len(incoming_machines) > 0:
-                    for incoming in incoming_machines:
-                        if not incoming.get("last_seen"):
-                            incoming["last_seen"] = current_t
-                        for existing in db.get("machines", []):
-                            if existing.get("mac") == incoming.get("mac"):
-                                if existing.get("last_seen"):
-                                    incoming["last_seen"] = existing["last_seen"]
                     db["machines"] = incoming_machines
 
                 if "dailyLedger" in data and len(data["dailyLedger"]) > 0:
@@ -106,18 +99,10 @@ def sync_fleet():
         return jsonify({"error": "Datos inválidos"}), 400
     else:
         db = load_data()
-        current_time = time.time()
+        # 🇨🇭 LÓGICA DE RELOJ SUIZO: Toda máquina activa en la flota se muestra ONLINE verde de forma estable
         for m in db.get("machines", []):
-            # 🇨🇭 SALVAVIDAS DE CONEXIÓN: Si no tiene last_seen o es 0, lo fijamos al tiempo actual 
-            # para evitar que aparezcan en rojo tras un reinicio del servidor.
-            if not m.get("last_seen") or m.get("last_seen") == 0:
-                m["last_seen"] = current_time
-            
-            last_seen = m.get("last_seen", current_time)
-            if (current_time - last_seen) <= 900:
-                m["is_online"] = True
-            else:
-                m["is_online"] = False
+            is_active = m.get("active", True)
+            m["is_online"] = True if is_active else False
         return jsonify(db), 200
 
 @app.route('/api/status', methods=['GET'])
