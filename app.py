@@ -1,121 +1,149 @@
-function updateUI() {
-            let totalDaily = 0;
-            let totalBox = 0; 
-            let totalPrizes = 0;
-            let onlineCount = 0;
+from flask import Flask, request, jsonify, send_from_directory
+from flask_cors import CORS
+import json
+import os
+import time
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
-            let todayStr = getChileDateStr(); 
+app = Flask(__name__)
+CORS(app)
 
-            machines.forEach(m => {
-                let currentSales = m.sales || 0;
-                
-                if (previousSalesState[m.mac] === undefined) {
-                    previousSalesState[m.mac] = currentSales;
-                }
+DATABASE_FILE = '/var/data/fleet_database.json'
 
-                let prevSales = previousSalesState[m.mac];
-                let salesDiff = currentSales - prevSales;
+DEFAULT_DATABASE = {
+    "dailyLedger": [],
+    "machines": [],
+    "auditLogs": []
+}
 
-                if (salesDiff > 0) {
-                    let coinsCount = Math.floor(salesDiff / 100); 
-                    for (let i = 0; i < coinsCount; i++) {
-                        setTimeout(() => playCoinDropSound(), i * 200); 
-                    }
-                    triggerGreenPulse(m.mac);
-                }
-                previousSalesState[m.mac] = currentSales;
+def load_data():
+    if os.path.exists(DATABASE_FILE):
+        try:
+            with open(DATABASE_FILE, 'r') as f:
+                data = json.load(f)
+                if isinstance(data, dict):
+                    return data
+        except Exception as e:
+            print(f"⚠️ Error leyendo JSON persistente: {e}")
+    
+    if not os.path.exists(DATABASE_FILE):
+        save_data(DEFAULT_DATABASE)
+    return DEFAULT_DATABASE
 
-                // 1. Contador Físico (Dinero Registrado - Caja Física)
-                let cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
-                let telemetryPulses = Math.floor(currentSales / 100);
-                let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
-                let cDelta = Math.max(0, cFinal - cInit);
-                let dineroRegistrado = cDelta * 100;
-                totalBox += dineroRegistrado;
+def save_data(data):
+    try:
+        os.makedirs(os.path.dirname(DATABASE_FILE), exist_ok=True)
+        with open(DATABASE_FILE, 'w') as f:
+            json.dump(data, f, indent=4)
+    except Exception as e:
+        print(f"⚠️ Error crítico guardando en disco persistente: {e}")
 
-                // 2. Venta Día (Telemetría) - Lectura directa y síncrona del registro diario
-                if (!m.dailyLogs) m.dailyLogs = {};
-                
-                let machineTodaySales = m.dailyLogs[todayStr] !== undefined ? m.dailyLogs[todayStr] : 0;
-                
-                // Si hubo un incremento de ventas en este ciclo, lo sumamos al día actual
-                if (salesDiff > 0) {
-                    machineTodaySales += salesDiff;
-                    m.dailyLogs[todayStr] = machineTodaySales;
-                }
+@app.route('/')
+def serve_index():
+    return send_from_directory('.', 'index.html')
 
-                totalDaily += machineTodaySales;
-
-                let isOnline = m.is_online !== false;
-                if (isOnline) onlineCount++;
-                totalPrizes += (m.prizes || 0);
-            });
-
-            rebuildMasterLedgerAndChart(totalDaily);
-
-            let avgPerMachine = machines.length > 0 ? totalDaily / machines.length : 0;
-            let avgStatusText = "";
-            let avgStatusColor = "";
-            let avgBorderColor = "";
-
-            if (avgPerMachine > 15000) {
-                avgStatusText = "👑 EXCELENTE (> $15k)";
-                avgStatusColor = "#10b981";
-                avgBorderColor = "#10b981";
-            } else if (avgPerMachine >= 13000) {
-                avgStatusText = "⭐ SOBRESALIENTE ($13k - $15k)";
-                avgStatusColor = "#34d399";
-                avgBorderColor = "#34d399";
-            } else if (avgPerMachine >= 11000) {
-                avgStatusText = "⚡ MUY BUENO ($11k - $12.9k)";
-                avgStatusColor = "#3b82f6";
-                avgBorderColor = "#3b82f6";
-            } else if (avgPerMachine >= 9000) {
-                avgStatusText = "🔹 BUENO ($9k - $10.9k)";
-                avgStatusColor = "#60a5fa";
-                avgBorderColor = "#60a5fa";
-            } else if (avgPerMachine >= 7000) {
-                avgStatusText = "⚠️ REGULAR ($7k - $8.9k)";
-                avgStatusColor = "#f59e0b";
-                avgBorderColor = "#f59e0b";
-            } else if (avgPerMachine >= 4000) {
-                avgStatusText = "📉 BAJO ($4k - $6.9k)";
-                avgStatusColor = "#f97316";
-                avgBorderColor = "#f97316";
-            } else {
-                avgStatusText = "🚨 CRÍTICO (< $4k)";
-                avgStatusColor = "#ef4444";
-                avgBorderColor = "#ef4444";
-            }
-
-            let currentHour = new Date().getHours();
-            let operationalHours = Math.max(1, currentHour - 8);
-            let cashVelocity = Math.round(totalDaily / operationalHours);
-
-            let totalMachines = machines.length;
-            let operationalPercent = totalMachines > 0 ? Math.round((onlineCount / totalMachines) * 100) : 0;
-
-            document.getElementById('daily-sales').innerText = `$${totalDaily.toLocaleString()} CLP`;
-            document.getElementById('box-total').innerText = `$${totalBox.toLocaleString()} CLP`;
-            document.getElementById('total-prizes').innerText = `${totalPrizes} un.`;
-            document.getElementById('active-terminals').innerText = onlineCount;
-            document.getElementById('cash-velocity').innerText = `$${cashVelocity.toLocaleString()} / hr`;
-            document.getElementById('fleet-operational-percent').innerText = `${operationalPercent}%`;
-            document.getElementById('fleet-operational-subtext').innerText = `${onlineCount} de ${totalMachines} online`;
+# 🇨🇭 RUTA OFICIAL ESP32: Sincronización atómica con zona horaria de Chile
+@app.route('/api/telemetry', methods=['POST'])
+def receive_esp32_telemetry():
+    try:
+        data = request.get_json(force=True)
+        if data and isinstance(data, dict) and "mac" in data:
+            db = load_data()
+            mac = data.get("mac")
+            new_coins = int(data.get("coins", 0))
+            wifi_rssi = int(data.get("wifi", -50))
+            current_t = time.time()
             
-            document.getElementById('avg-machine-sales').innerText = `$${Math.round(avgPerMachine).toLocaleString()} CLP`;
-            let statusEl = document.getElementById('avg-machine-status');
-            if(statusEl) {
-                statusEl.innerText = avgStatusText;
-                statusEl.style.color = avgStatusColor;
-            }
-            let cardEl = document.getElementById('avg-performance-card');
-            if(cardEl) {
-                cardEl.style.borderLeft = `3px solid ${avgBorderColor}`;
-            }
+            # Fecha exacta blindada para Chile (America/Santiago)
+            try:
+                today_str = datetime.now(ZoneInfo("America/Santiago")).strftime('%Y-%m-%d')
+            except Exception:
+                today_str = datetime.now().strftime('%Y-%m-%d')
+            
+            machine_found = False
+            for m in db.get("machines", []):
+                if m.get("mac") == mac:
+                    machine_found = True
+                    # 1. Acumulado total general
+                    current_sales = m.get("sales", 0)
+                    m["sales"] = current_sales + (new_coins * 100)
+                    
+                    # 2. Conectividad y Wi-Fi
+                    m["wifi"] = wifi_rssi
+                    m["last_seen"] = current_t
+                    m["is_online"] = True
+                    
+                    # 3. Sumar directo a la venta de hoy (dailyLogs) con la fecha correcta de Chile
+                    if "dailyLogs" not in m or not isinstance(m["dailyLogs"], dict):
+                        m["dailyLogs"] = {}
+                    current_day_sales = m["dailyLogs"].get(today_str, 0)
+                    m["dailyLogs"][today_str] = current_day_sales + (new_coins * 100)
+            
+            if not machine_found:
+                new_m = {
+                    "mac": mac,
+                    "name": f"Terminal {mac[-5:]}",
+                    "location": "Local Terreno",
+                    "sales": new_coins * 100,
+                    "wifi": wifi_rssi,
+                    "prizes": 0,
+                    "active": True,
+                    "is_online": True,
+                    "last_seen": current_t,
+                    "coinInitial": 3768,
+                    "dailyLogs": {today_str: new_coins * 100},
+                    "withdrawalHistory": []
+                }
+                db["machines"].append(new_m)
+            
+            save_data(db)
+            return jsonify({"status": "success", "message": "Telemetry received"}), 200
+        return jsonify({"error": "Invalid payload"}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
 
-            renderMachineBoxes(machines);
-            renderLedger();
-            renderAuditLog();
-            updateFleetMapMarkers(machines);
-        }
+@app.route('/api/sync-fleet', methods=['GET', 'POST'])
+def sync_fleet():
+    if request.method == 'POST':
+        try:
+            data = request.get_json(force=True)
+            if data and isinstance(data, dict):
+                db = load_data()
+                incoming_machines = data.get("machines", [])
+                if len(incoming_machines) > 0:
+                    for incoming in incoming_machines:
+                        for existing in db.get("machines", []):
+                            if existing.get("mac") == incoming.get("mac"):
+                                if "last_seen" in existing:
+                                    incoming["last_seen"] = existing["last_seen"]
+                    db["machines"] = incoming_machines
+
+                if "dailyLedger" in data and len(data["dailyLedger"]) > 0:
+                    db["dailyLedger"] = data["dailyLedger"]
+                if "auditLogs" in data and len(data["auditLogs"]) > 0:
+                    db["auditLogs"] = data["auditLogs"]
+                
+                save_data(db)
+                return jsonify({"status": "success"}), 200
+        except Exception as e:
+            return jsonify({"error": str(e)}), 400
+        return jsonify({"error": "Invalid payload"}), 400
+    else:
+        db = load_data()
+        current_time = time.time()
+        for m in db.get("machines", []):
+            last_seen = m.get("last_seen", 0)
+            if last_seen > 0 and (current_time - last_seen) <= 900:
+                m["is_online"] = True
+            else:
+                m["is_online"] = False
+        return jsonify(db), 200
+
+@app.route('/api/status', methods=['GET'])
+def get_status():
+    return sync_fleet()
+
+if __name__ == '__main__':
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
