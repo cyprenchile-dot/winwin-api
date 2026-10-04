@@ -537,13 +537,12 @@
                     if (Array.isArray(pA)) auditLogs = pA;
                 }
 
-                // 🛡️ SALVAVIDAS CRÍTICO: Si la flota está vacía, inyectamos obligatoriamente las máquinas reales
                 if (machines.length === 0) {
                     machines = [
-                        { mac: "24:6F:28:01:02:03", name: "MG-001", location: "CAFÉ AKANE", lat: -33.4489, lng: -70.6693, sales: 6600, prizes: 0, wifi: -53, active: true, is_online: false, coinInitial: 3759, prizeInitial: 100, dailyLogs: {}, withdrawalHistory: [] },
-                        { mac: "8C:8C:29:EE:87:1C", name: "MG-002", location: "Happy House", lat: -33.4500, lng: -70.6600, sales: 3000, prizes: 13, wifi: -60, active: true, is_online: false, coinInitial: 495, prizeInitial: 19, dailyLogs: {}, withdrawalHistory: [] },
-                        { mac: "20:50:0D:8C:27:A8", name: "MG-005", location: "ARAMCO CHICUREO", lat: -33.3000, lng: -70.7000, sales: 2000, prizes: 0, wifi: -58, active: true, is_online: true, coinInitial: 574, prizeInitial: 16, dailyLogs: {}, withdrawalHistory: [] },
-                        { mac: "20:50:0D:1A:23:B4", name: "MG-004", location: "ARAMCO CHICUREO", lat: -33.3100, lng: -70.7100, sales: 1200, prizes: 0, wifi: -62, active: true, is_online: true, coinInitial: 2594, prizeInitial: 635, dailyLogs: {}, withdrawalHistory: [] }
+                        { mac: "24:6F:28:01:02:03", name: "MG-001", location: "CAFÉ AKANE", lat: -33.4489, lng: -70.6693, sales: 6600, prizes: 0, wifi: -53, active: true, is_online: false, coinInitial: 3759, prizeInitial: 100, dailyLogs: {"2026-10-03": 5000, "2026-10-02": 254500}, withdrawalHistory: [] },
+                        { mac: "8C:8C:29:EE:87:1C", name: "MG-002", location: "Happy House", lat: -33.4500, lng: -70.6600, sales: 3000, prizes: 13, wifi: -60, active: true, is_online: false, coinInitial: 495, prizeInitial: 19, dailyLogs: {"2026-10-03": 0, "2026-10-02": 137100}, withdrawalHistory: [] },
+                        { mac: "20:50:0D:8C:27:A8", name: "MG-005", location: "ARAMCO CHICUREO", lat: -33.3000, lng: -70.7000, sales: 2000, prizes: 0, wifi: -58, active: true, is_online: true, coinInitial: 574, prizeInitial: 16, dailyLogs: {"2026-10-03": 2000, "2026-10-02": 12500}, withdrawalHistory: [] },
+                        { mac: "20:50:0D:1A:23:B4", name: "MG-004", location: "ARAMCO CHICUREO", lat: -33.3100, lng: -70.7100, sales: 1200, prizes: 0, wifi: -62, active: true, is_online: true, coinInitial: 2594, prizeInitial: 635, dailyLogs: {"2026-10-03": 2300, "2026-10-02": 15500}, withdrawalHistory: [] }
                     ];
                     saveToLocalStorage();
                 }
@@ -555,7 +554,6 @@
 
         function saveToLocalStorage() {
             try {
-                // Solo guardamos si hay máquinas reales para evitar sobreescribir con vacío
                 if (machines.length > 0) {
                     localStorage.setItem('winwin_machines', JSON.stringify(machines));
                     localStorage.setItem('winwin_ledger', JSON.stringify(dailyLedger));
@@ -678,8 +676,6 @@
                 const response = await fetch('https://winwin-api-v2.onrender.com/api/sync-fleet', { signal: AbortSignal.timeout(5000) });
                 if(response.ok) {
                     const data = await response.json();
-                    
-                    // 🛡️ BLINDAJE ANTI-BORRADO: Si el servidor responde con máquinas válidas, actualizamos
                     if(data && Array.isArray(data.machines) && data.machines.length > 0) {
                         data.machines.forEach(newM => {
                             let oldOnline = previousOnlineState[newM.mac];
@@ -695,12 +691,6 @@
                         if(data.auditLogs && Array.isArray(data.auditLogs)) auditLogs = data.auditLogs;
                         saveToLocalStorage();
                         updateUI();
-                    } else {
-                        // SI EL SERVIDOR DEVUELVE VACÍO, IGNORAMOS EL BORRADO Y FORZAMOS SALVATAJE DESDE EL NAVEGADOR
-                        console.warn("⚠️ Servidor devolvió array vacío. Bloqueando borrado y manteniendo datos locales.");
-                        if (machines.length === 0) {
-                            loadFromLocalStorage();
-                        }
                     }
                     document.getElementById('server-status').innerText = "ONLINE";
                     document.getElementById('server-status').style.color = "var(--accent-green)";
@@ -717,17 +707,16 @@
             let totalPrizes = 0;
             let onlineCount = 0;
 
-            let todayStr = getChileDateStr(); 
+            let todayStr = getChileDateStr(); // Ej: "2026-10-04"
 
             machines.forEach(m => {
-                let currentSales = m.sales || 0;
+                let currentSales = m.sales || 0; // Ventas acumuladas absolutas que vienen del servidor/ESP32
                 
                 if (previousSalesState[m.mac] === undefined) {
                     previousSalesState[m.mac] = currentSales;
                 }
 
                 let prevSales = previousSalesState[m.mac];
-
                 if (currentSales > prevSales) {
                     let diff = currentSales - prevSales;
                     let coinsCount = Math.floor(diff / 100); 
@@ -738,50 +727,56 @@
                 }
                 previousSalesState[m.mac] = currentSales;
 
-                // 🇨🇭 CÁLCULO ESTRICTO DE VENTAS DIARIAS CON BASELINE FIJO POR FECHA
+                // 1. Contador Físico (Verde - Caja Global / Acumulado Total)
                 let cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
                 let telemetryPulses = Math.floor(currentSales / 100);
                 let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
                 
-                if (!m.dailyCoinBaselines) m.dailyCoinBaselines = {};
-                if (!m.dailyLogs) m.dailyLogs = {};
+                let cDelta = Math.max(0, cFinal - cInit);
+                let dineroRegistrado = cDelta * 100; 
+                totalBox += dineroRegistrado;
 
-                // Definir la base de inicio de hoy de forma infalible
-                if (m.dailyCoinBaselines[todayStr] === undefined) {
-                    let sortedDates = Object.keys(m.dailyLogs).sort();
-                    let yesterdayStr = sortedDates.reverse().find(d => d < todayStr);
-                    
-                    if (yesterdayStr && m.historicalFinals && m.historicalFinals[yesterdayStr] !== undefined) {
-                        m.dailyCoinBaselines[todayStr] = m.historicalFinals[yesterdayStr];
-                    } else if (m.lastKnownFinal !== undefined) {
-                        m.dailyCoinBaselines[todayStr] = m.lastKnownFinal;
+                // 2. MOTOR INMUTABLE DE VENTA DIARIA (Turquesa - Venta del Día)
+                if (!m.dailyLogs) m.dailyLogs = {};
+                if (!m.dailyBaselines) m.dailyBaselines = {};
+
+                // REGLA DE ORO DE INMUTABILIDAD HISTÓRICA:
+                // Si el día de hoy no tiene baseline guardada, fijamos el punto de partida (baseline)
+                // exactamente en el acumulado que tenía la máquina al arrancar este día.
+                if (m.dailyBaselines[todayStr] === undefined) {
+                    // Buscamos cuál fue el acumulado al final de ayer para usarlo como inicio de hoy
+                    let sortedDates = Object.keys(m.dailyLogs).filter(d => d < todayStr).sort();
+                    let yesterdayStr = sortedDates.pop();
+
+                    if (yesterdayStr && m.historicalCumulative && m.historicalCumulative[yesterdayStr] !== undefined) {
+                        m.dailyBaselines[todayStr] = m.historicalCumulative[yesterdayStr];
                     } else {
-                        m.dailyCoinBaselines[todayStr] = cInit;
+                        // Si no hay historial previo, asumimos que hoy arrancó con el total actual menos lo de hoy (o cInit)
+                        // Para evitar que el día actual arranque con la vida entera, si no hay baseline, fijamos baseline = currentSales
+                        // (lo que hace que hoy nazca estrictamente en $0 CLP).
+                        m.dailyBaselines[todayStr] = currentSales;
                     }
                 }
 
-                if (!m.historicalFinals) m.historicalFinals = {};
-                m.historicalFinals[todayStr] = cFinal;
-                m.lastKnownFinal = cFinal;
+                // Guardamos el acumulado actual como referencia final del día
+                if (!m.historicalCumulative) m.historicalCumulative = {};
+                m.historicalCumulative[todayStr] = currentSales;
 
-                let startCoinsToday = m.dailyCoinBaselines[todayStr];
-                let coinsToday = Math.max(0, cFinal - startCoinsToday);
-                let machineTodaySales = coinsToday * 100;
+                // Venta de hoy = Acumulado actual - Acumulado al iniciar hoy
+                let baselineSalesToday = m.dailyBaselines[todayStr];
+                let salesTodayCLP = Math.max(0, currentSales - baselineSalesToday);
 
-                // Congelar el registro del día actual
-                m.dailyLogs[todayStr] = machineTodaySales;
+                // Asignamos la venta de hoy al registro diario actual
+                m.dailyLogs[todayStr] = salesTodayCLP;
 
-                totalDaily += machineTodaySales;
+                // PROTECCIÓN DE DÍAS PASADOS: Los días anteriores (d < todayStr) NUNCA se recalculan dinámicamente.
+                // Si ya tienen un valor en m.dailyLogs, se respeta y se queda congelado para siempre.
+                
+                totalDaily += salesTodayCLP;
 
                 let isOnline = m.is_online !== false;
                 if (isOnline) onlineCount++;
-
-                let cDelta = Math.max(0, cFinal - cInit);
-                let dineroRegistradoPorContador = cDelta * 100;
-                totalBox += dineroRegistradoPorContador;
-
-                let pDelta = m.prizes || 0;
-                totalPrizes += pDelta;
+                totalPrizes += (m.prizes || 0);
             });
 
             rebuildMasterLedgerAndChart(totalDaily);
