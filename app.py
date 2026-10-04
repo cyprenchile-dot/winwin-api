@@ -41,6 +41,53 @@ def save_data(data):
 def serve_index():
     return send_from_directory('.', 'index.html')
 
+# 🇨🇭 RUTA OFICIAL PARA LOS ESP32 (Alineada con tu código de Arduino)
+@app.route('/api/telemetry', methods=['POST'])
+def receive_esp32_telemetry():
+    try:
+        data = request.get_json(force=True)
+        if data and isinstance(data, dict) and "mac" in data:
+            db = load_data()
+            mac = data.get("mac")
+            new_coins = int(data.get("coins", 0))
+            wifi_rssi = int(data.get("wifi", -50))
+            current_t = time.time()
+            
+            machine_found = False
+            for m in db.get("machines", []):
+                if m.get("mac") == mac:
+                    machine_found = True
+                    # Sumar las nuevas monedas incrementales que envía el ESP32 a la venta total de la máquina
+                    current_sales = m.get("sales", 0)
+                    m["sales"] = current_sales + (new_coins * 100)
+                    m["wifi"] = wifi_rssi
+                    m["last_seen"] = current_t
+                    m["is_online"] = True
+            
+            # Si el ESP32 reporta una MAC nueva no registrada, la añadimos automáticamente
+            if not machine_found:
+                new_m = {
+                    "mac": mac,
+                    "name": f"Terminal {mac[-5:]}",
+                    "location": "Local Terreno",
+                    "sales": new_coins * 100,
+                    "wifi": wifi_rssi,
+                    "prizes": 0,
+                    "active": True,
+                    "is_online": True,
+                    "last_seen": current_t,
+                    "coinInitial": 3768,
+                    "dailyLogs": {},
+                    "withdrawalHistory": []
+                }
+                db["machines"].append(new_m)
+            
+            save_data(db)
+            return jsonify({"status": "success", "message": "Telemetry received"}), 200
+        return jsonify({"error": "Invalid payload"}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
 @app.route('/api/sync-fleet', methods=['GET', 'POST'])
 def sync_fleet():
     if request.method == 'POST':
@@ -48,43 +95,13 @@ def sync_fleet():
             data = request.get_json(force=True)
             if data and isinstance(data, dict):
                 db = load_data()
-                current_t = time.time()
-                
-                # 1. Reporte directo por pulso desde el ESP32
-                if "mac" in data and "machines" not in data:
-                    mac = data.get("mac")
-                    machine_found = False
-                    for m in db.get("machines", []):
-                        if m.get("mac") == mac:
-                            machine_found = True
-                            if "sales" in data: m["sales"] = data["sales"]
-                            if "wifi" in data: m["wifi"] = data["wifi"]
-                            if "prizes" in data: m["prizes"] = data["prizes"]
-                            m["last_seen"] = current_t
-                            m["is_online"] = True
-                    
-                    if not machine_found:
-                        new_m = {
-                            "mac": mac,
-                            "name": data.get("name", f"Terminal {mac[-5:]}"),
-                            "location": data.get("location", "Local Terreno"),
-                            "sales": data.get("sales", 0),
-                            "wifi": data.get("wifi", -50),
-                            "prizes": data.get("prizes", 0),
-                            "active": True,
-                            "is_online": True,
-                            "last_seen": current_t,
-                            "coinInitial": 3768,
-                            "dailyLogs": {}
-                        }
-                        db["machines"].append(new_m)
-                    
-                    save_data(db)
-                    return jsonify({"status": "success", "mode": "esp32_direct"}), 200
-
-                # 2. Sincronización desde la interfaz web
                 incoming_machines = data.get("machines", [])
                 if len(incoming_machines) > 0:
+                    for incoming in incoming_machines:
+                        for existing in db.get("machines", []):
+                            if existing.get("mac") == incoming.get("mac"):
+                                if "last_seen" in existing:
+                                    incoming["last_seen"] = existing["last_seen"]
                     db["machines"] = incoming_machines
 
                 if "dailyLedger" in data and len(data["dailyLedger"]) > 0:
@@ -93,16 +110,21 @@ def sync_fleet():
                     db["auditLogs"] = data["auditLogs"]
                 
                 save_data(db)
-                return jsonify({"status": "success", "mode": "web_sync"}), 200
+                return jsonify({"status": "success"}), 200
         except Exception as e:
             return jsonify({"error": str(e)}), 400
         return jsonify({"error": "Datos inválidos"}), 400
     else:
         db = load_data()
-        # 🇨🇭 LÓGICA DE RELOJ SUIZO: Toda máquina activa en la flota se muestra ONLINE verde de forma estable
+        current_time = time.time()
         for m in db.get("machines", []):
-            is_active = m.get("active", True)
-            m["is_online"] = True if is_active else False
+            last_seen = m.get("last_seen", 0)
+            # 🇨🇭 Validar estado en línea real: Si el ESP32 ha reportado en los últimos 15 minutos (900s), está ONLINE verde. 
+            # Si no ha reportado nunca o pasó el tiempo, se marca OFFLINE de forma verídica.
+            if last_seen > 0 and (current_time - last_seen) <= 900:
+                m["is_online"] = True
+            else:
+                m["is_online"] = False
         return jsonify(db), 200
 
 @app.route('/api/status', methods=['GET'])
