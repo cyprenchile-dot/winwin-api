@@ -48,8 +48,9 @@ def sync_fleet():
             data = request.get_json(force=True)
             if data and isinstance(data, dict):
                 db = load_data()
+                current_t = time.time()
                 
-                # 1. Si el ESP32 reporta de forma individual (ej. {"mac": "...", "sales": ...})
+                # 1. Reporte directo desde el ESP32 en terreno
                 if "mac" in data and "machines" not in data:
                     mac = data.get("mac")
                     machine_found = False
@@ -59,8 +60,7 @@ def sync_fleet():
                             if "sales" in data: m["sales"] = data["sales"]
                             if "wifi" in data: m["wifi"] = data["wifi"]
                             if "prizes" in data: m["prizes"] = data["prizes"]
-                            # Registrar latido exacto para poner en verde (ONLINE)
-                            m["last_seen"] = time.time()
+                            m["last_seen"] = current_t
                             m["is_online"] = True
                     
                     if not machine_found:
@@ -73,7 +73,7 @@ def sync_fleet():
                             "prizes": data.get("prizes", 0),
                             "active": True,
                             "is_online": True,
-                            "last_seen": time.time(),
+                            "last_seen": current_t,
                             "coinInitial": 3768,
                             "dailyLogs": {}
                         }
@@ -82,14 +82,15 @@ def sync_fleet():
                     save_data(db)
                     return jsonify({"status": "success", "mode": "esp32_direct"}), 200
 
-                # 2. Si la interfaz web sincroniza la flota completa
+                # 2. Sincronización desde la interfaz web
                 incoming_machines = data.get("machines", [])
                 if len(incoming_machines) > 0:
-                    # Preservar el last_seen previo si ya existía en la base de datos
                     for incoming in incoming_machines:
+                        if not incoming.get("last_seen"):
+                            incoming["last_seen"] = current_t
                         for existing in db.get("machines", []):
                             if existing.get("mac") == incoming.get("mac"):
-                                if "last_seen" in existing:
+                                if existing.get("last_seen"):
                                     incoming["last_seen"] = existing["last_seen"]
                     db["machines"] = incoming_machines
 
@@ -107,9 +108,13 @@ def sync_fleet():
         db = load_data()
         current_time = time.time()
         for m in db.get("machines", []):
-            last_seen = m.get("last_seen", 0)
-            # Margen de 15 minutos (900 segundos) para el estado ONLINE verde
-            if last_seen > 0 and (current_time - last_seen) <= 900:
+            # 🇨🇭 SALVAVIDAS DE CONEXIÓN: Si no tiene last_seen o es 0, lo fijamos al tiempo actual 
+            # para evitar que aparezcan en rojo tras un reinicio del servidor.
+            if not m.get("last_seen") or m.get("last_seen") == 0:
+                m["last_seen"] = current_time
+            
+            last_seen = m.get("last_seen", current_time)
+            if (current_time - last_seen) <= 900:
                 m["is_online"] = True
             else:
                 m["is_online"] = False
