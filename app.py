@@ -25,25 +25,24 @@ function updateUI() {
                 }
                 previousSalesState[m.mac] = currentSales;
 
-                // 1. Contador Físico (Dinero Registrado)
+                // 1. Contador Físico (Dinero Registrado - Caja Física)
                 let cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
                 let telemetryPulses = Math.floor(currentSales / 100);
                 let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
-                
                 let cDelta = Math.max(0, cFinal - cInit);
-                let dineroRegistrado = cDelta * 100; 
+                let dineroRegistrado = cDelta * 100;
                 totalBox += dineroRegistrado;
 
-                // 2. Venta Día (Telemetría) - Sincronización limpia con el backend
+                // 2. Venta Día (Telemetría) - Lectura directa y síncrona del registro diario
                 if (!m.dailyLogs) m.dailyLogs = {};
                 
-                // Si el backend ya mandó un valor para hoy, lo respetamos y actualizamos
-                // Si no, aseguramos que la venta de hoy sea el acumulado o la diferencia correcta
-                let machineTodaySales = m.dailyLogs[todayStr] !== undefined ? m.dailyLogs[todayStr] : currentSales;
+                let machineTodaySales = m.dailyLogs[todayStr] !== undefined ? m.dailyLogs[todayStr] : 0;
                 
-                // Si la venta guardada es menor que el cambio total, o si el ESP32 mandó el incremento directo:
-                // Nos aseguramos de que refleje los pulsos de hoy.
-                m.dailyLogs[todayStr] = machineTodaySales;
+                // Si hubo un incremento de ventas en este ciclo, lo sumamos al día actual
+                if (salesDiff > 0) {
+                    machineTodaySales += salesDiff;
+                    m.dailyLogs[todayStr] = machineTodaySales;
+                }
 
                 totalDaily += machineTodaySales;
 
