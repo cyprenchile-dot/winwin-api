@@ -36,6 +36,7 @@
         .btn-secondary { background: var(--accent-blue); }
         .btn-purple { background: var(--accent-purple); }
         .btn-danger { background: var(--accent-red); }
+        .btn-warning { background: var(--accent-yellow); color: #000; }
 
         .status-badge { background: rgba(16, 185, 129, 0.12); color: var(--accent-green); padding: 4px 10px; border-radius: 15px; font-size: 0.75rem; font-weight: bold; border: 1px solid rgba(16, 185, 129, 0.3); margin-left: auto; }
 
@@ -164,6 +165,7 @@
         <div class="header-actions" style="margin-top: 8px;">
             <button class="btn btn-secondary" id="role-toggle-btn" onclick="toggleUserRole()">👤 Rol: Gerencia (Admin)</button>
             <button class="btn btn-secondary" id="sound-toggle-btn" onclick="toggleSound()" style="background: var(--accent-green);">🔊 Sonido Monedas: ON</button>
+            <button class="btn btn-warning gerencia-only" onclick="resetDailySalesManual()">🔄 Reset Venta Hoy</button>
             <button class="btn" onclick="registerMachine()" id="btn-reg">+ Registrar MAC</button>
             <button class="btn btn-purple" onclick="openGlobalReport()" id="btn-global-report">📄 Informe Mensual / Flota</button>
             <button class="btn btn-danger" onclick="resetGlobalBox()" id="btn-vaciar-global" style="flex:unset;">Vaciar Caja Global</button>
@@ -701,6 +703,21 @@
             }
         }
 
+        function resetDailySalesManual() {
+            if (confirm("¿Estás seguro de establecer el punto de partida de hoy en $0 CLP para todas las máquinas?")) {
+                let todayStr = getChileDateStr();
+                machines.forEach(m => {
+                    if (!m.dayStartSales) m.dayStartSales = {};
+                    m.dayStartSales[todayStr] = m.sales || 0;
+                    if (!m.dailyLogs) m.dailyLogs = {};
+                    m.dailyLogs[todayStr] = 0;
+                });
+                saveStateAndSync();
+                updateUI();
+                alert("✅ Corte diario realizado. Las ventas de hoy inician en $0 CLP.");
+            }
+        }
+
         function updateUI() {
             let totalDaily = 0;
             let totalBox = 0; 
@@ -729,7 +746,7 @@
                 }
                 previousSalesState[m.mac] = currentSales;
 
-                // 1. Contador Físico (Dinero Registrado - Caja Física)
+                // 1. Contador Físico (Dinero Registrado - Caja Física Global)
                 let cInit = m.coinInitial !== undefined ? m.coinInitial : 3768;
                 let telemetryPulses = Math.floor(currentSales / 100);
                 let cFinal = (m.coinManualBase !== undefined) ? (m.coinManualBase + telemetryPulses) : (cInit + telemetryPulses);
@@ -737,28 +754,33 @@
                 let dineroRegistrado = cDelta * 100;
                 totalBox += dineroRegistrado;
 
-                // 2. Venta Día (Telemetría) - Sincronización Directa por Delta con el Dinero Registrado
-                if (!m.dailyLogs || typeof m.dailyLogs !== 'object' || Array.isArray(m.dailyLogs)) {
+                // 2. Venta Día (Telemetría) - ARQUITECTURA DE LÍNEA BASE (BASELINE) FIJA
+                if (!m.dayStartSales || typeof m.dayStartSales !== 'object') {
+                    m.dayStartSales = {};
+                }
+
+                // Si hoy no tiene baseline registrada, fijamos el punto de partida exactamente en el acumulado actual (o 0 si es un día nuevo limpio)
+                if (m.dayStartSales[todayStr] === undefined || isNaN(m.dayStartSales[todayStr])) {
+                    // Verificamos si hay un cierre o día anterior para congelar el pasado, 
+                    // para hoy empezamos restando el acumulado actual para que nazca en $0 CLP.
+                    m.dayStartSales[todayStr] = currentSales;
+                }
+
+                let baselineToday = m.dayStartSales[todayStr];
+
+                // Si el acumulado es menor que la baseline (por un reseteo de caja), actualizamos la baseline
+                if (currentSales < baselineToday) {
+                    baselineToday = currentSales;
+                    m.dayStartSales[todayStr] = baselineToday;
+                }
+
+                // Venta de hoy = Acumulado total actual - Base de inicio de hoy
+                let machineTodaySales = Math.max(0, currentSales - baselineToday);
+
+                if (!m.dailyLogs || typeof m.dailyLogs !== 'object') {
                     m.dailyLogs = {};
                 }
-
-                // Asegurar que exista la clave de hoy
-                if (m.dailyLogs[todayStr] === undefined || isNaN(m.dailyLogs[todayStr])) {
-                    m.dailyLogs[todayStr] = 0;
-                }
-
-                // 🇨🇭 ARQUITECTURA SUIZA: Si hubo aumento en el acumulado general, sumarlo a hoy
-                if (salesDiff > 0) {
-                    m.dailyLogs[todayStr] += salesDiff;
-                }
-
-                // Blindaje adicional: Si la venta diaria está en 0 pero el dinero registrado actual es mayor que cero (ej. al recargar),
-                // igualamos la venta diaria al dinero registrado o al acumulado actual para que nunca aparezca en $0 CLP.
-                let machineTodaySales = m.dailyLogs[todayStr];
-                if (machineTodaySales === 0 && dineroRegistrado > 0) {
-                    machineTodaySales = dineroRegistrado;
-                    m.dailyLogs[todayStr] = machineTodaySales;
-                }
+                m.dailyLogs[todayStr] = machineTodaySales;
 
                 totalDaily += machineTodaySales;
 
