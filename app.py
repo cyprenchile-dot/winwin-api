@@ -43,7 +43,7 @@ def save_data(data):
 def serve_index():
     return send_from_directory('.', 'index.html')
 
-# 🇨🇭 RUTA OFICIAL ESP32: Sincronización atómica con zona horaria de Chile
+# 🇨🇭 RUTA OFICIAL ESP32: Sincronización atómica de Acumulado y Venta Diaria
 @app.route('/api/telemetry', methods=['POST'])
 def receive_esp32_telemetry():
     try:
@@ -55,7 +55,7 @@ def receive_esp32_telemetry():
             wifi_rssi = int(data.get("wifi", -50))
             current_t = time.time()
             
-            # Fecha exacta blindada para Chile (America/Santiago)
+            # Obtener la fecha local exacta de Chile
             try:
                 today_str = datetime.now(ZoneInfo("America/Santiago")).strftime('%Y-%m-%d')
             except Exception:
@@ -65,16 +65,16 @@ def receive_esp32_telemetry():
             for m in db.get("machines", []):
                 if m.get("mac") == mac:
                     machine_found = True
-                    # 1. Acumulado total general
+                    # 1. Actualizar acumulado total de ventas
                     current_sales = m.get("sales", 0)
                     m["sales"] = current_sales + (new_coins * 100)
                     
-                    # 2. Conectividad y Wi-Fi
+                    # 2. Actualizar estado de red y latido
                     m["wifi"] = wifi_rssi
                     m["last_seen"] = current_t
                     m["is_online"] = True
                     
-                    # 3. Sumar directo a la venta de hoy (dailyLogs) con la fecha correcta de Chile
+                    # 3. ACTUALIZACIÓN CLAVE: Sumar estrictamente al registro del día actual
                     if "dailyLogs" not in m or not isinstance(m["dailyLogs"], dict):
                         m["dailyLogs"] = {}
                     current_day_sales = m["dailyLogs"].get(today_str, 0)
