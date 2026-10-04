@@ -24,7 +24,6 @@ def load_data():
                     # Si el archivo tiene datos válidos, los devolvemos
                     if len(data.get("machines", [])) > 0:
                         return data
-                    # Si el archivo existe pero está vacío, revisamos si hay respaldo previo en memoria
                     return data
         except Exception as e:
             print(f"⚠️ Error leyendo JSON persistente: {e}")
@@ -83,7 +82,8 @@ def sync_fleet():
         current_time = time.time()
         for m in db.get("machines", []):
             last_seen = m.get("last_seen", 0)
-            if last_seen > 0 and (current_time - last_seen) <= 35:
+            # 🛡️ Margen ampliado a 900 segundos (15 minutos) para evitar falsos "OFFLINE"
+            if last_seen > 0 and (current_time - last_seen) <= 900:
                 m["is_online"] = True
             else:
                 m["is_online"] = False
