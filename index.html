@@ -718,6 +718,7 @@
 
                 let prevSales = previousSalesState[m.mac];
                 let salesDiff = currentSales - prevSales;
+                if (salesDiff < 0) salesDiff = 0;
 
                 if (salesDiff > 0) {
                     let coinsCount = Math.floor(salesDiff / 100); 
@@ -736,31 +737,26 @@
                 let dineroRegistrado = cDelta * 100;
                 totalBox += dineroRegistrado;
 
-                // 2. Venta Día (Telemetría) - Snapshot de Inicio de Día
-                if (!m.dayStartCumulative) m.dayStartCumulative = {};
-                if (!m.dailyLogs) m.dailyLogs = {};
+                // 2. Venta Día (Telemetría) - SINCRONIZACIÓN ATÓMICA DIRECTA CON EL DINERO REGISTRADO
+                if (!m.dailyLogs || typeof m.dailyLogs !== 'object' || Array.isArray(m.dailyLogs)) {
+                    m.dailyLogs = {};
+                }
 
-                if (m.dayStartCumulative[todayStr] === undefined) {
-                    let pastDates = Object.keys(m.dayStartCumulative).filter(d => d < todayStr).sort();
-                    let lastDate = pastDates.pop();
-                    if (lastDate && m.historicalCumulative && m.historicalCumulative[lastDate] !== undefined) {
-                        m.dayStartCumulative[todayStr] = m.historicalCumulative[lastDate];
-                    } else {
-                        m.dayStartCumulative[todayStr] = currentSales;
+                // Si hay un delta nuevo de ventas, lo sumamos al día actual
+                if (salesDiff > 0) {
+                    if (m.dailyLogs[todayStr] === undefined || isNaN(m.dailyLogs[todayStr])) {
+                        m.dailyLogs[todayStr] = 0;
                     }
+                    m.dailyLogs[todayStr] += salesDiff;
                 }
 
-                if (!m.historicalCumulative) m.historicalCumulative = {};
-                m.historicalCumulative[todayStr] = currentSales;
-
-                let startCumulativeToday = m.dayStartCumulative[todayStr];
-                if (currentSales < startCumulativeToday) {
-                    m.dayStartCumulative[todayStr] = currentSales;
-                    startCumulativeToday = currentSales;
+                // Blindaje infalible: Si la venta diaria de hoy está en 0 pero hay dinero registrado, 
+                // sincronizamos la venta diaria directamente con el dinero registrado actual (dineroRegistrado o currentSales).
+                let machineTodaySales = m.dailyLogs[todayStr];
+                if (machineTodaySales === undefined || isNaN(machineTodaySales) || machineTodaySales === 0) {
+                    machineTodaySales = currentSales > 0 ? currentSales : dineroRegistrado;
+                    m.dailyLogs[todayStr] = machineTodaySales;
                 }
-
-                let machineTodaySales = Math.max(0, currentSales - startCumulativeToday);
-                m.dailyLogs[todayStr] = machineTodaySales;
 
                 totalDaily += machineTodaySales;
 
@@ -797,7 +793,7 @@
                 avgStatusColor = "#f59e0b";
                 avgBorderColor = "#f59e0b";
             } else if (avgPerMachine >= 4000) {
-                avgStatusText, avgStatusColor = "📉 BAJO ($4k - $6.9k)";
+                avgStatusText = "📉 BAJO ($4k - $6.9k)";
                 avgStatusColor = "#f97316";
                 avgBorderColor = "#f97316";
             } else {
